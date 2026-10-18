@@ -261,9 +261,9 @@ State: one Engine per tab via React context + `useSyncExternalStore`. Header: sa
 
 | Route | Content | Pri |
 |---|---|---|
-| `/` | Landing (built): hero with "stays in its lane" D2 illustration and five chapter tabs · Why (role contrast 69 vs 0) · Slow drift (D6 accumulator chart) · Response ladder · Evidence (ledger hashed in the browser) · gradient CTA · dark footer. ~4.4 screens at 1440×900. | P0 |
+| `/` | Landing (built): hero with "stays in its lane" D2 illustration and five chapter tabs · Why (role contrast 69 vs 0) · Slow drift (D6 accumulator chart) · Response ladder · Evidence (ledger hashed in the browser) · gradient CTA · dark footer. ~4.4 screens at 1440×900. **Live (step 4):** plays D2, D3 and D6 in the browser; the hero badges, 69 vs 0 cards, drift chart, ladder (engine `BANDS`) and ledger strip read those runs. | P0 |
 | `/app` Fleet | agent table (role, state, token with over-provisioned scopes flagged, baseline confidence, last 24 calls, drift) · incident launcher (D2, D4, D5, D6, D7, D8, D12 played on the live fleet) · HOLD queue with approve / role change / deny · alerts by root cause. **Live (step 3).** | P0 |
-| `/app/investigate/:scenario` | **Signature page.** Left: scenario list. Centre: session graph (React Flow): call nodes with score ring + band chip; the taint edge from the culprit doc highlighted; delegation edges to child agents. Bottom: timeline scrubber (step / autoplay). Right: alert card. | P0 |
+| `/app/investigate/:scenario` | **Signature page.** Left: scenario list. Centre: session graph (React Flow): call nodes with score ring + band chip; the taint edge from the culprit doc highlighted; delegation edges to child agents. Bottom: timeline scrubber (step / autoplay). Right: alert card. **Live (step 4):** D1–D8 and D12 each play on a fresh sandbox in both modes; tags, taint edges, twins and dividers are derived from the run. Charts: enforce-vs-shadow score trace, per-decision score build-up (noisy-OR, lands exactly on the score), D6 drift chart. | P0 |
 | `/app/alerts/:id` | full alert card (§5.5) + factor bars + token diff + evidence + actions (confirm compromise / mark FP / approve change). **Live (step 3)**, with a root-cause filter. | P0 |
 | `/app/agents/:id` | charter (signed, versioned, diff) · token scopes (over-provisioned flagged) · confidence · top transitions · volume bands · score timeline · accumulator chart with H line. **Live (step 3).** | P0 |
 | `/app/graph` | delegation graph across agents | P1 |
@@ -338,7 +338,7 @@ Backup: the Saturday recording. Rehearse once in shadow mode ("would have quaran
 ```bash
 npm test                                      # engine + parity + scenarios green
 node research/sim/fusion_sim.mjs              # D2 69/72, D3 0, D4 63/59/69, D5 37/15, D7 78, D8 100, D12 37/43, benign max 5 (S2 only), D11 26
-npm test                                      # 195 tests; scenarios assert every §6 row through the real engine, the console's live store and views are tested too
+npm test                                      # 207 tests; scenarios assert every §6 row through the real engine, the console's live store and views are tested too
 node research/sim/drift_acc_sim.mjs           # 0 benign alarms ×3 seeds; D6 at 7; D9 2–8; mimicry miss; D6 per-call max 29
 npm run scenario -- D2                        # explanation matches §5.5 shape
 npm run eval && git diff --stat apps/console/public/eval/results.json

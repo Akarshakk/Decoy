@@ -1,24 +1,7 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
-import type { LedgerEntry } from '../data/ledger';
 import { fmtDateTime } from '../live/labels';
 import { LiveProvider, useLive } from '../live/react';
-import type { Mode } from '../live/store';
-
-export type { Mode };
-
-// Investigate still replays the reference-sim fixtures and keeps their own action log (step 4 moves it onto the engine).
-interface ConsoleState {
-  mode: Mode;
-  setMode: (m: Mode) => void;
-  log: LedgerEntry[];
-  append: (type: string, payload: Record<string, unknown>) => void;
-  reset: () => void;
-  resetKey: number;
-}
-
-const Ctx = createContext<ConsoleState | null>(null);
-export const useConsole = () => useContext(Ctx)!;
 
 const NAV: { to: string; label: string; match: string; icon: ReactNode }[] = [
   { to: '/app/fleet', label: 'Fleet', match: '/app/fleet', icon: <path d="M2.5 7.5 8 3l5.5 4.5V13h-11z M6.5 13V9.5h3V13" /> },
@@ -35,21 +18,13 @@ export function ConsoleShell() {
 
 function Shell() {
   const live = useLive();
-  const [log, setLog] = useState<LedgerEntry[]>([]);
-  const [resetKey, setResetKey] = useState(0);
   const { pathname } = useLocation();
-
-  const state = useMemo<ConsoleState>(() => ({
-    mode: live.mode, setMode: m => live.store.setMode(m), log, resetKey,
-    append: (type, payload) => setLog(l => [...l, { seq: l.length, type, payload }]),
-    reset: () => { live.store.reset(); setLog([]); setResetKey(k => k + 1); },
-  }), [live.mode, live.store, log, resetKey]);
 
   const { ledger } = live;
   const pending = live.engine ? [...live.engine.holds.values()].filter(h => h.status === 'pending').length : 0;
 
   return (
-    <Ctx.Provider value={state}>
+    <>
       <div className="console">
         <aside className="side">
           <Link to="/" className="brand side-brand"><span className="brand-name">Swaroop</span></Link>
@@ -78,7 +53,7 @@ function Shell() {
         </aside>
         <Outlet />
       </div>
-    </Ctx.Provider>
+    </>
   );
 }
 

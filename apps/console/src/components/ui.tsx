@@ -1,6 +1,6 @@
 import type { ReactNode, ElementType, ComponentPropsWithoutRef } from 'react';
 import type { Band } from '@swaroop/engine';
-import { BAND_LABEL } from '../live/labels';
+import { BAND_EDGES, BAND_LABEL } from '../live/labels';
 
 const BAND_CLASS: Record<Band, string> = {
   ALLOW: 'allow', HOLD: 'hold', DOWN_SCOPE: 'down', QUARANTINE: 'quar', REVOKE: 'revoke',
@@ -28,7 +28,7 @@ export function Kbd({ children }: { children: ReactNode }) {
   return <kbd className="kbd">{children}</kbd>;
 }
 
-const TICKS = [30, 55, 75, 90];
+const TICKS = BAND_EDGES.map(([t]) => t);   // band edges straight from the engine's BANDS table
 
 // 0–100 ring coloured by band. `ticks` draws the band edges around a large ring.
 export function ScoreRing({ score, band, size = 36, ticks = false }: { score: number; band: Band; size?: number; ticks?: boolean }) {

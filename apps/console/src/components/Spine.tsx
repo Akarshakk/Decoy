@@ -1,16 +1,11 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { bandOf, type Scenario, type Step, type Verdict } from '../data/fixtures';
+import type { StepView } from '../live/scenarios';
 import { BandChip, ScoreRing, bandClass } from './ui';
 
-// In shadow mode nothing is enforced: no token changes and no escalation, so the band is the score's own band.
-export function verdictFor(step: Step, shadow: boolean): Verdict & { wouldHave: boolean } {
-  if (!shadow) return { ...step, wouldHave: false };
-  const v = step.shadow ?? { ...step, escalated: undefined, band: bandOf(step.score) };
-  return { ...v, wouldHave: v.band !== 'ALLOW' };
-}
-
 interface Props {
-  scenario: Scenario;
+  steps: StepView[];
+  mainAgent: string;
+  taint: { from: number; to: number[] } | null;
   visible: number;
   selected: number;
   onSelect: (i: number) => void;
@@ -21,11 +16,10 @@ interface Props {
 
 type Thread = { d: string; dots: [number, number][] };
 
-export function Spine({ scenario, visible, selected, onSelect, shadow = false, compact = false, renderAside }: Props) {
+export function Spine({ steps, mainAgent, taint, visible, selected, onSelect, shadow = false, compact = false, renderAside }: Props) {
   const wrap = useRef<HTMLOListElement>(null);
   const cards = useRef<(HTMLButtonElement | null)[]>([]);
   const [thread, setThread] = useState<Thread | null>(null);
-  const taint = scenario.taint;
 
   // The taint thread runs from the untrusted document to every call it influenced, hugging the cards' left edge.
   useLayoutEffect(() => {
@@ -54,22 +48,23 @@ export function Spine({ scenario, visible, selected, onSelect, shadow = false, c
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [taint, visible, compact, scenario.id]);
+  }, [taint, visible, compact, steps]);
 
   return (
     <ol ref={wrap} className={`spine ${compact ? 'spine-compact' : ''} ${renderAside ? 'spine-with-aside' : ''}`}>
-      {scenario.steps.map((step, i) => {
+      {steps.map((step, i) => {
         const shown = i < visible;
-        const v = verdictFor(step, shadow);
-        const tag = v.escalated ? 'escalated' : step.tag;
+        const d = step.decision;
+        const would = shadow && d.band !== 'ALLOW';
+        const tag = d.escalated ? 'escalated' : step.tag;
         return (
-          <li key={i} className={`spine-row ${shown ? '' : 'is-pending'}`}>
-            {step.dividerBefore && <div className="spine-divider">{step.dividerBefore}</div>}
+          <li key={d.id} className={`spine-row ${shown ? '' : 'is-pending'}`}>
+            {step.divider && <div className="spine-divider">{step.divider}</div>}
             {!compact && <span className="spine-index">{i + 1}</span>}
             <span className="spine-dot" aria-hidden />
             <button
               ref={el => { cards.current[i] = el; }}
-              className={`call ${i === selected ? 'is-selected' : ''} call-${bandClass(v.band)}`}
+              className={`call ${i === selected ? 'is-selected' : ''} call-${bandClass(d.band)}`}
               onClick={() => onSelect(i)}
               disabled={!shown}
               aria-current={i === selected}
@@ -77,11 +72,11 @@ export function Spine({ scenario, visible, selected, onSelect, shadow = false, c
               <span className="call-name">
                 <span className="call-tool">{step.tool}</span>
                 {step.arg && <span className="call-arg"> · {step.arg}</span>}
-                {step.agent !== scenario.agent && <span className="call-agent">{step.agent}</span>}
+                {step.agent !== mainAgent && <span className="call-agent">{step.agent}</span>}
               </span>
-              <ScoreRing score={shown ? v.score : 0} band={v.band} size={compact ? 30 : 34} />
+              <ScoreRing score={shown ? d.score : 0} band={d.band} size={compact ? 30 : 34} />
               <span className="call-verdict">
-                <BandChip band={v.band} prefix={v.wouldHave ? 'Would ' : undefined} />
+                <BandChip band={d.band} prefix={would ? 'Would ' : undefined} />
                 {tag && <span className="tag">{tag}</span>}
               </span>
             </button>

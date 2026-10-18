@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react';
+import type { Band, Decision } from '@swaroop/engine';
+import { BAND_LABEL } from '../live/labels';
+import { bandClass } from './ui';
 
 // Hero illustration: "stays in its lane". The lane is procurement-01's role; its usual stops sit on it.
-// After the poisoned supplier PDF the path leaves the lane, and Swaroop scores each off-lane step (D2: 69, then 72).
-// The in-role price lookup at the end of the lane still runs.
+// After the poisoned supplier PDF the path leaves the lane, and each off-lane step carries the score the engine gave it
+// in a live D2 run (passed in by the landing page). The in-role price lookup at the end of the lane still runs.
 
 const LANE_Y = 372;
 const TILE = 68;
@@ -17,12 +20,13 @@ function Tile({ x, label, children, tint }: { x: number; label: string; children
   );
 }
 
-function Badge({ x, y, score, band, label, side }: { x: number; y: number; score: number; band: 'down' | 'quar'; label: string; side: 'left' | 'right' }) {
+function Badge({ x, y, d, side }: { x: number; y: number; d?: Decision; side: 'left' | 'right' }) {
+  const band: Band = d?.band ?? 'ALLOW';
   return (
     <g>
-      <circle cx={x} cy={y} r={21} className={`ink fill-${band}`} />
-      <text x={x} y={y} textAnchor="middle" dominantBaseline="central" className="art-mono art-num">{score}</text>
-      <text x={side === 'left' ? x - 30 : x + 30} y={y} dominantBaseline="central" textAnchor={side === 'left' ? 'end' : 'start'} className="art-mono art-tiny">{label}</text>
+      <circle cx={x} cy={y} r={21} className={`ink fill-${d ? bandClass(band) : 'white'}`} />
+      <text x={x} y={y} textAnchor="middle" dominantBaseline="central" className="art-mono art-num">{d ? d.score : '·'}</text>
+      <text x={side === 'left' ? x - 30 : x + 30} y={y} dominantBaseline="central" textAnchor={side === 'left' ? 'end' : 'start'} className="art-mono art-tiny">{d ? BAND_LABEL[band].toLowerCase() : 'scoring…'}</text>
     </g>
   );
 }
@@ -30,11 +34,11 @@ function Badge({ x, y, score, band, label, side }: { x: number; y: number; score
 const OFF_1 = 'M 296 338 C 296 272, 290 222, 322 222';
 const OFF_2 = 'M 492 222 C 524 222, 520 160, 520 116';
 
-export function HeroArt() {
+export function HeroArt({ read, post }: { read?: Decision; post?: Decision }) {
   return (
     <figure className="ring-art">
       <svg className="art" viewBox="0 20 630 432" role="img"
-        aria-label="procurement-01 travels its role lane: vendors, invoices, a supplier PDF. After the PDF its path leaves the lane to salaries, scored 69 and down-scoped, then to acme-verify.co, scored 72 and quarantined. The price lookup back on the lane still runs.">
+        aria-label={`procurement-01 travels its role lane: vendors, invoices, a supplier PDF. After the PDF its path leaves the lane to salaries${read ? `, scored ${read.score} (${BAND_LABEL[read.band]})` : ''}, then to acme-verify.co${post ? `, scored ${post.score} (${BAND_LABEL[post.band]})` : ''}. The price lookup back on the lane still runs.`}>
 
         {/* the lane = the role */}
         <rect x="8" y={LANE_Y - 42} width="596" height="84" rx="42" className="ink fill-lane" />
@@ -107,10 +111,10 @@ export function HeroArt() {
         </g>
 
         <g className="art-pop" style={{ animationDelay: '1300ms' }}>
-          <Badge x={297} y={262} score={69} band="down" label="down-scope" side="left" />
+          <Badge x={297} y={262} d={read} side="left" />
         </g>
         <g className="art-pop" style={{ animationDelay: '1500ms' }}>
-          <Badge x={518} y={186} score={72} band="quar" label="quarantine" side="right" />
+          <Badge x={518} y={186} d={post} side="right" />
         </g>
       </svg>
       <figcaption className="ring-cap">

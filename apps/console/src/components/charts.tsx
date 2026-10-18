@@ -1,8 +1,9 @@
 // Live charts for the console. Data comes from engine decisions and the drift accumulator's own history.
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { Link } from 'react-router';
-import { DRIFT_K, type Band, type Decision } from '@swaroop/engine';
-import { BAND_EDGES, BAND_LABEL, fmtDateTime } from '../live/labels';
+import { bandOf, DRIFT_K, type Band, type Decision } from '@swaroop/engine';
+import { BAND_EDGES, BAND_LABEL, CAUSE_LABEL, fmtDateTime } from '../live/labels';
+import { buildUp } from '../live/scenarios';
 import { isAlert } from '../live/view';
 import { BandChip, bandClass } from './ui';
 
@@ -129,6 +130,95 @@ export function AccumulatorChart({ history, H }: { history: { S: number; x: numb
           <b>Session {hover! + 1}</b>
           <span>Drift <b className="num">{hv.S.toFixed(2)}</b> of {H}{hv.alarm ? ': alarm, then reset to 0' : ''}</span>
           <span>This session added <b className="num">{hv.x.toFixed(2)}</b> (minus k = {DRIFT_K})</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** How the noisy-OR total is built: one row per factor, each bar running from the score before it to the score after it. */
+export function BuildUpChart({ decision }: { decision: Decision }) {
+  const rows = buildUp(decision);
+  if (!rows.length) return <p className="small muted">No factor fired, so there is nothing to add up.</p>;
+  let prev = 0;
+  return (
+    <div className="bu">
+      <div className="bu-plot">
+        {BAND_EDGES.map(([t, b]) => <i key={t} className={`bu-edge te-${bandClass(b)}`} style={{ left: `calc(112px + (100% - 160px) * ${t / 100})` }} aria-hidden />)}
+        <ol>
+          {rows.map(r => {
+            const from = prev, to = r.cumulative;
+            prev = to;
+            return (
+              <li key={r.factor} className="bu-row">
+                <span className="bu-name mono"><b>{r.factor}</b> {CAUSE_LABEL[r.factor]}</span>
+                <span className="bu-track">
+                  <span className="bu-carry" style={{ width: `${from}%` }} />
+                  <span className={`bu-seg sb-${bandClass(bandOf(Math.round(to)))}`} style={{ left: `${from}%`, width: `${Math.max(0.6, to - from)}%` }}
+                    title={`${r.factor}: weighted ${r.weighted.toFixed(2)}, score ${from.toFixed(1)} → ${to.toFixed(1)}`} />
+                </span>
+                <span className="num bu-num">+{(to - from).toFixed(1)}</span>
+              </li>
+            );
+          })}
+        </ol>
+        <div className="bu-axis" aria-hidden><span>0</span>{BAND_EDGES.map(([t]) => <span key={t} style={{ left: `${t}%` }}>{t}</span>)}</div>
+      </div>
+      <p className="small muted bu-foot">
+        {decision.rootCause === 'TRIPWIRE' ? 'A decoy was touched: the score is set to 100.'
+          : <>Each factor adds its weight times what is left below 100{decision.multiplier < 1 ? `, scaled by ×${decision.multiplier.toFixed(2)} for data sensitivity` : ''}. Total <b className="num">{decision.score}</b>.</>}
+      </p>
+    </div>
+  );
+}
+
+const MC_H = 170, MC_TOP = 12, MC_BOTTOM = 24;
+
+/** The same script in both modes: enforced scores (solid) against shadow scores (dashed). One axis, 0–100. */
+export function ModeCompareChart({ enforce, shadow, cursor, visible, onPick }: { enforce: Decision[]; shadow: Decision[]; cursor?: number; visible?: number; onPick?: (i: number) => void }) {
+  const [ref, w] = useWidth(600);
+  const [hover, setHover] = useState<number | null>(null);
+  const n = Math.min(enforce.length, shadow.length);
+  if (!n) return null;
+  const shown = Math.max(1, Math.min(n, visible ?? n));     // the replay only reveals steps it has played
+  const padL = 10, padR = 96;
+  const plotW = w - padL - padR;
+  const x = (i: number) => padL + (n === 1 ? plotW / 2 : (i * plotW) / (n - 1));
+  const y = (s: number) => MC_TOP + (1 - s / 100) * (MC_H - MC_TOP - MC_BOTTOM);
+  const path = (ds: Decision[]) => ds.slice(0, shown).map((d, i) => `${i ? 'L' : 'M'} ${x(i)} ${y(d.score)}`).join(' ');
+  const differ = enforce.slice(0, n).some((d, i) => d.score !== shadow[i]!.score);
+  const hi = hover ?? null;
+
+  return (
+    <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
+      <ul className="mc-legend">
+        <li><i className="mc-key mc-key-enf" />Enforce</li>
+        <li><i className="mc-key mc-key-sh" />Shadow{differ ? '' : ' (same scores)'}</li>
+      </ul>
+      <svg width={w} height={MC_H} role="img" aria-label={`Scores per step. Enforce: ${enforce.slice(0, n).map(d => d.score).join(', ')}. Shadow: ${shadow.slice(0, n).map(d => d.score).join(', ')}.`}>
+        {BAND_EDGES.map(([t, b]) => (
+          <g key={t}>
+            <line x1={padL} x2={padL + plotW} y1={y(t)} y2={y(t)} className={`tl-edge te-${bandClass(b)}`} />
+            <text x={padL + plotW + 8} y={y(t)} dominantBaseline="central" className="tl-label">{t} {BAND_LABEL[b]}</text>
+          </g>
+        ))}
+        <line x1={padL} x2={padL + plotW} y1={y(0)} y2={y(0)} className="tl-axis" />
+        {cursor !== undefined && cursor < n && <line x1={x(cursor)} x2={x(cursor)} y1={MC_TOP} y2={y(0)} className="mc-cursor" />}
+        <path d={path(shadow)} className="mc-sh" />
+        <path d={path(enforce)} className="mc-enf" />
+        {shadow.slice(0, shown).map((d, i) => d.score !== enforce[i]!.score && <circle key={`s${i}`} cx={x(i)} cy={y(d.score)} r={3.5} className="mc-dot-sh" />)}
+        {enforce.slice(0, shown).map((d, i) => <circle key={`e${i}`} cx={x(i)} cy={y(d.score)} r={hi === i ? 5 : 4} className={`mc-dot sb-${bandClass(d.band)}`} />)}
+        {enforce.slice(0, n).map((_, i) => <text key={`t${i}`} x={x(i)} y={MC_H - 6} textAnchor="middle" className="tl-label">{i + 1}</text>)}
+        {enforce.slice(0, shown).map((_, i) => (
+          <rect key={`h${i}`} x={x(i) - plotW / Math.max(1, n - 1) / 2} y={0} width={plotW / Math.max(1, n - 1)} height={MC_H} fill="transparent"
+            onMouseEnter={() => setHover(i)} onClick={() => onPick?.(i)} style={{ cursor: onPick ? 'pointer' : undefined }} />
+        ))}
+      </svg>
+      {hi !== null && (
+        <div className="tip" data-side={x(hi) > w / 2 ? 'left' : 'right'} style={{ left: x(hi), top: 6 }}>
+          <b>Step {hi + 1} · <span className="mono">{enforce[hi]!.call.tool}</span></b>
+          <span>Enforce <b className="num">{enforce[hi]!.score}</b> <BandChip band={enforce[hi]!.band} /></span>
+          <span>Shadow <b className="num">{shadow[hi]!.score}</b> <BandChip band={shadow[hi]!.band} prefix="Would " /></span>
         </div>
       )}
     </div>

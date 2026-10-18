@@ -3,6 +3,7 @@ import type { Decision, Engine, LedgerRecord } from '@swaroop/engine';
 import { BAND_EDGES, BAND_LABEL, CAUSE_LABEL, fmtDateTime, STATUS_LABEL } from '../live/labels';
 import { useLive } from '../live/react';
 import { causeOf, statusOf, type AlertStatus } from '../live/view';
+import { BuildUpChart } from './charts';
 import { Bar, BandChip, ScoreRing, bandClass } from './ui';
 
 function outcome(d: Decision, status: AlertStatus, owner: string) {
@@ -18,9 +19,13 @@ function outcome(d: Decision, status: AlertStatus, owner: string) {
   }
 }
 
+// Browsers coarsen performance.now() to ~0.1 ms, so report at that resolution rather than as fake microseconds.
+const ms = (us: number) => (us < 100 ? '< 0.1 ms' : `${(us / 1000).toFixed(1)} ms`);
+
 const refersTo = (r: LedgerRecord, id: string) => r.type !== 'decision' && (r.payload.id === id || r.payload.decision === id);
 
-export function DecisionCard({ decision: d, engine }: { decision: Decision; engine: Engine }) {
+/** `readOnly` for replays (Investigate): owner actions belong to the live fleet, not to a recorded scenario run. */
+export function DecisionCard({ decision: d, engine, readOnly = false }: { decision: Decision; engine: Engine; readOnly?: boolean }) {
   const { store, busy } = useLive();
   const status = statusOf(engine, d);
   const charter = engine.charterOf(d.call.agentId);
@@ -68,6 +73,11 @@ export function DecisionCard({ decision: d, engine }: { decision: Decision; engi
       )}
 
       <section className="alert-sec">
+        <h3>How the score adds up</h3>
+        <BuildUpChart decision={d} />
+      </section>
+
+      <section className="alert-sec">
         <h3>Factors <span className="muted mono">weight · drop if removed</span></h3>
         {factors.length ? (
           <ul className="factors">
@@ -113,7 +123,7 @@ export function DecisionCard({ decision: d, engine }: { decision: Decision; engi
           <div><dt>Snapshot</dt><dd className="mono">{d.snapshotId}</dd></div>
           <div><dt>Charter</dt><dd className="mono">{charter.role} v{d.charterVersion}</dd></div>
           {evidence.length > 0 && <div><dt>Refs</dt><dd className="mono">{evidence.join(', ')}</dd></div>}
-          <div><dt>Latency</dt><dd className="mono">{d.latencyUs} µs total · {d.inlineLatencyUs} µs inline</dd></div>
+          <div><dt>Latency</dt><dd className="mono" title="Measured in this browser. Browsers round performance.now() to about 0.1 ms, so faster steps show as under 0.1 ms.">{ms(d.latencyUs)} total · {ms(d.inlineLatencyUs)} inline checks</dd></div>
           <div><dt>Ledger</dt><dd className="mono">#{own?.seq ?? '?'} · {d.ledgerHash.slice(0, 12)}</dd></div>
         </dl>
         <details className="dc-raw">
@@ -131,7 +141,7 @@ export function DecisionCard({ decision: d, engine }: { decision: Decision; engi
         </section>
       )}
 
-      <div className="actions">
+      {!readOnly && <div className="actions">
         {status === 'held' && (
           <>
             <button className="btn btn-ink btn-block" disabled={!!busy} onClick={() => store.approveHold(d.id)}>Approve and run</button>
@@ -144,7 +154,7 @@ export function DecisionCard({ decision: d, engine }: { decision: Decision; engi
         )}
         {!fpLogged && <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.markFalsePositive(d.id)}>Mark false positive</button>}
         {agentState === 'revoked' && <p className="small muted">{d.call.agentId} is revoked. Reset the sandbox to restore it.</p>}
-      </div>
+      </div>}
     </div>
   );
 }
