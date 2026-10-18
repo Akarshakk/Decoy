@@ -64,6 +64,7 @@ describe('D2 poisoned supplier PDF (the PS example)', () => {
     const recs = engine.ledgerRecords();
     expect(recs.filter(r => r.type === 'decision')).toHaveLength(6);
     expect(recs.filter(r => r.type === 'token_reissue')).toHaveLength(2);
+    expect(engine.agent('procurement-01').state).toBe('quarantined');   // the session's drift alarm must not soften it to watch
     const { verifyChain } = await import('@swaroop/engine');
     expect(await verifyChain(recs)).toBeNull();
   });
@@ -145,6 +146,7 @@ describe('D11 quarter-end, 45 calls', () => {
     expect(decisions).toHaveLength(45);
     expect(bands(decisions).every(b => b === 'ALLOW')).toBe(true);
     expect(Math.max(...scores(decisions))).toBe(26);
+    expect(decisions.every(d => d.credentials.ok && d.executed)).toBe(true);   // 90 minutes of work outlives a 15-minute token
   });
 });
 
@@ -170,5 +172,6 @@ describe('benign held-out sessions through the full engine', () => {
     expect(r.calls).toBeGreaterThan(1000);
     expect(r.atOrAbove30).toBe(0);
     expect(r.alarms).toBe(0);
+    expect(r.notExecuted).toBe(0);
   });
 });

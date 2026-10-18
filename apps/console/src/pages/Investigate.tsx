@@ -77,6 +77,7 @@ export function Investigate() {
           <div className="canvas-head">
             <p><span className="mono">{scenario.agent}</span> <span className="muted">({scenario.role})</span></p>
             <p className="muted">{scenario.summary}</p>
+            <p className="replay-note small">Replaying numbers recorded from the reference simulation. Fleet, Agents, Alerts and Ledger run on the live engine; this page moves onto it next.</p>
             {shadow && scenario.shadowNote && <p className="shadow-note"><mark className="mark">{scenario.shadowNote}</mark></p>}
           </div>
 

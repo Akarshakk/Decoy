@@ -29,6 +29,49 @@ describe('engine actions', () => {
     expect(run.engine.snapshotOf('procurement-01').baseline.n).toBe(308);
   });
 
+  it('a new agent measures drift against its peer\'s volume bands until its own snapshot has 5 sessions', async () => {
+    const run = await Run.create();
+    const s = await run.session('procurement-02');
+    for (const [t, a] of [['erp.get_vendor', { id: 'V-118' }], ['erp.get_price_list', { sku: 'A4-80' }], ['erp.get_price_list', { sku: 'TONER-K' }],
+      ['erp.create_purchase_request', { item: 'A4-80', qty: 40 }]] as const) await s.call(t, a);
+    const end = await s.end();
+    expect(end?.alarm).toBe(false);
+    expect(end?.x).toBeLessThan(1);           // an empty snapshot made this 10 + surprise and alarmed on day one
+    expect(run.engine.agent('procurement-02').state).toBe('active');
+  });
+
+  it('with peers disabled, a new agent\'s drift has no volume term until it has its own bands', async () => {
+    const run = await Run.create({ peers: false });
+    const s = await run.session('procurement-02');
+    for (const [t, a] of [['erp.get_vendor', { id: 'V-118' }], ['erp.get_price_list', { sku: 'A4-80' }], ['erp.get_price_list', { sku: 'TONER-K' }],
+      ['erp.create_purchase_request', { item: 'A4-80', qty: 40 }]] as const) await s.call(t, a);
+    const end = await s.end();
+    expect(end?.alarm).toBe(false);
+    expect(end?.x).toBe(0);                  // in-charter tools under the charter prior: no surprise, and no bands to exceed
+  });
+
+  it('the agent runtime refreshes its token before the 15-minute expiry; a stolen copy is never refreshed', async () => {
+    const run = await Run.create();
+    const s = await run.session('procurement-01');
+    for (let i = 0; i < 12; i++) await s.call('erp.get_price_list', { sku: 'A4-80' });   // 24 minutes
+    expect(s.decisions.every(d => d.credentials.ok)).toBe(true);
+    const thief = await run.session('procurement-01', { runtime: { id: 'rt-x', asn: 'AS13335' }, jwt: await run.engine.tokenFor('procurement-01', run.t) });
+    for (let i = 0; i < 9; i++) await thief.call('erp.get_vendor', { id: 'V-118' });
+    expect(thief.decisions.at(-1)!.credentials).toEqual({ ok: false, reason: 'expired' });
+  });
+
+  it('after D2 quarantines procurement-01, later calls outside its token are blocked, never held, and it stays quarantined', async () => {
+    const run = await Run.create();
+    await D2(run);
+    const s = await run.session('procurement-01');
+    const pr = await s.call('erp.create_purchase_request', { item: 'A4-80', qty: 400 });
+    const onboard = await s.call('erp.onboard_supplier', { supplier: 'Nordwind Supplies GmbH' });
+    for (const d of [pr, onboard]) expect([d.credentials.ok, d.held, d.executed]).toEqual([false, false, false]);
+    expect(run.engine.holds.has(pr.id)).toBe(false);
+    expect(run.engine.agent('procurement-01').state).toBe('quarantined');
+    expect(run.engine.agent('procurement-01').tokenVer).toBe(3);
+  });
+
   it('owner reset clears the drift latch and the watch state', async () => {
     const run = await Run.create();
     const s = await run.session('procurement-01');

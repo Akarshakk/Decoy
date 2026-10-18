@@ -7,7 +7,7 @@ import { extractValues, newFlowState, recordDataRead, recordIngest, s3Flow, sink
 import { endSession as endCredentialSession, newCredentialState, recordPresentation, s5Credential, type CredentialProfile } from './checks/s5_credential';
 import { actionSummary, explain, FACTOR_LABEL } from './fusion/explain';
 import { fuse, WEIGHTS } from './fusion/fuse';
-import { DriftAccumulator, type Snapshot } from './learned/drift';
+import { DriftAccumulator, type DriftReference, type Snapshot } from './learned/drift';
 import { Baseline, VolumeBands } from './learned/s2_baseline';
 import { classifyInjection, s4Injection, type InjectionResult } from './learned/s4_injection';
 import { s6Delegation } from './learned/s6_delegation';
@@ -158,6 +158,12 @@ export class Engine {
   driftOf(agentId: string) { return this.rec(agentId).drift; }
   snapshotOf(agentId: string) { return this.rec(agentId).snapshot; }
   agentIds() { return [...this.agents.keys()]; }
+  peerOf(agentId: string) { return this.rec(agentId).peer; }
+  /** The volume bands S2 scores this agent against right now, and whose they are. */
+  volumeFor(agentId: string): { bands: VolumeBands | null; source: 'own' | 'peer' | 'none' } {
+    const r = this.rec(agentId), bands = this.volumeBandsFor(r);
+    return { bands, source: !bands ? 'none' : bands === r.volume ? 'own' : 'peer' };
+  }
 
   private rec(id: string) {
     const r = this.agents.get(id);
@@ -307,7 +313,8 @@ export class Engine {
       escalated: resp.escalated, enforced: resp.enforced, rootCause: fused.rootCause, culpritDoc: s4.culpritDoc ?? s3.subs.find(s => s.code === 'untrusted_sink_arg')?.evidence[0],
       tokenVerBefore, tokenVerAfter: resp.token.verAfter ?? tokenVerBefore, charterVersion: charter.version, snapshotId: r.snapshot.id,
       latencyUs: 0, ledgerHash: '', explanation: '',
-      executed, held: resp.held && this.mode === 'enforce', escalationReason: resp.escalationReason, invariant: resp.invariant,
+      executed, held: resp.held && this.mode === 'enforce' && !credentialBlock,   // approving a hold must never bypass a failed token
+      escalationReason: resp.escalationReason, invariant: resp.invariant,
       inlineLatencyUs: Math.round((tA - t0) * 1000), tokenAction: resp.token, agentStateAfter: d ? r.agent.state : resp.agentStateAfter,
     };
     decision.explanation = explain({
@@ -337,6 +344,14 @@ export class Engine {
     return r.peer ? this.rec(r.peer).volume : null;
   }
 
+  // A snapshot frozen before the agent had 5 sessions has no volume bands worth the name (an empty one made every
+  // benign tool count a spike and alarmed a new agent on day one). Until then drift uses the peer's frozen bands,
+  // and with no peer no volume term, exactly as S2 does live.
+  private driftReference(r: AgentRecord): DriftReference {
+    if (r.snapshot.volume.sessions.length >= MIN_VOLUME_SESSIONS) return r.snapshot;
+    return { baseline: r.snapshot.baseline, volume: r.peer ? this.rec(r.peer).snapshot.volume : null };
+  }
+
   private descendants(s: SessionState): string[] {
     return s.children.flatMap(c => {
       const child = this.sessions.get(c);
@@ -346,6 +361,7 @@ export class Engine {
 
   private async applyToken(resp: ReturnType<typeof respond>, r: AgentRecord, sess: SessionState, id: string, ts: number) {
     const t = resp.token;
+    if (resp.enforced && !sess.delegation) r.agent.state = resp.agentStateAfter;   // also when no re-issue was needed
     if (t.kind === 'none') return;
     if (t.target === 'delegated_session' && sess.delegation) {
       sess.delegation.ver = t.verAfter!;
@@ -359,7 +375,6 @@ export class Engine {
     for (const s of t.removed ?? []) if (!r.removedAt.has(s)) r.removedAt.set(s, { ver: t.verAfter!, decisionId: id });
     r.scopes = t.scopesAfter!;
     r.agent.tokenVer = t.verAfter!;
-    r.agent.state = resp.agentStateAfter;
     if (t.kind === 'revoke') {
       for (const c of t.cascade ?? []) { const sid = c.split(':')[1]!; const cs = this.sessions.get(sid); if (cs?.delegation) cs.delegation.revoked = true; }
     } else {
@@ -396,9 +411,9 @@ export class Engine {
     const r = this.rec(s.agentId);
     const tools = s.tools;
     // The session whose call the owner just approved as a role change is the new normal, not drift.
-    const result = s.roleChangeApproved ? { S: r.drift.S, x: 0, alarm: false } : r.drift.endSession(tools, r.snapshot);
+    const result = s.roleChangeApproved ? { S: r.drift.S, x: 0, alarm: false } : r.drift.endSession(tools, this.driftReference(r));
     if (result.alarm) {
-      r.agent.state = 'watch';
+      if (r.agent.state === 'active') r.agent.state = 'watch';   // an alarm only ever raises the state, never softens a quarantine
       await this.ledger.append('drift_alarm', { agent: r.agent.id, S: +result.S.toFixed(4), snapshot: r.snapshot.id }, ts);
     }
     // Anti-poisoning: only low-risk sessions teach the baseline.

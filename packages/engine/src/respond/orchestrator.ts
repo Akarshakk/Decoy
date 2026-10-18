@@ -6,6 +6,8 @@ const LADDER: Band[] = ['ALLOW', 'HOLD', 'DOWN_SCOPE', 'QUARANTINE', 'REVOKE'];
 const HIGH_IMPACT: ActionClass[] = ['send_external', 'payment', 'delete'];
 const atLeast = (b: Band, floor: Band) => (LADDER.indexOf(b) >= LADDER.indexOf(floor) ? b : floor);
 const oneUp = (b: Band) => LADDER[Math.min(LADDER.length - 1, LADDER.indexOf(b) + 1)]!;
+const SEVERITY: AgentState[] = ['active', 'watch', 'scoped_down', 'quarantined', 'revoked'];
+const harsher = (a: AgentState, b: AgentState) => (SEVERITY.indexOf(a) >= SEVERITY.indexOf(b) ? a : b);
 
 export interface RespondInput {
   score: number;
@@ -64,11 +66,17 @@ export function respond(i: RespondInput): Response {
 
   const target = i.delegated ? 'delegated_session' : 'agent';
   const actionOfTool = (name: string) => i.catalog.find(t => t.name === name)?.action;
-  const reissue = (scopesAfter: string[], state: AgentState): Response => ({
-    ...base, enforced: true, runs: false, held: false,
-    token: { kind: 'reissue', target, verAfter: i.tokenVer + 1, scopesAfter, removed: i.scopes.filter(s => !scopesAfter.includes(s)) },
-    agentStateAfter: i.delegated ? i.agentState : state,
-  });
+  // A response only ever narrows: the new token is a subset of the old one, no re-issue when nothing would be removed,
+  // and the agent's state only moves towards revoked (a DOWN_SCOPE never softens a quarantine).
+  const reissue = (wanted: string[], state: AgentState): Response => {
+    const scopesAfter = wanted.filter(s => i.scopes.includes(s));
+    const removed = i.scopes.filter(s => !scopesAfter.includes(s));
+    return {
+      ...base, enforced: true, runs: false, held: false,
+      token: removed.length ? { kind: 'reissue', target, verAfter: i.tokenVer + 1, scopesAfter, removed } : { kind: 'none' },
+      agentStateAfter: i.delegated ? i.agentState : harsher(i.agentState, state),
+    };
+  };
 
   switch (band) {
     case 'ALLOW':

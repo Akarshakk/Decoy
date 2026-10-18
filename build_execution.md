@@ -213,7 +213,10 @@ Action: token v2 → v3 = in-charter reads. Owner finance-platform notified. No 
 - At session end, the baseline absorbs the session only if peak <30, no HOLD was denied, and the agent is not watch/quarantined/revoked.
 - The snapshot re-freezes every 7 simulated days **only while S = 0 and no alarm is latched** (otherwise slow drift would teach itself into the reference), and on a role change.
 - The session whose call the owner approved as a role change does not feed the accumulator.
-- Cold start for volume: an agent with fewer than 5 sessions uses its peer's volume bands; with no peer, volume is not scored.
+- Cold start for volume: an agent with fewer than 5 sessions uses its peer's volume bands; with no peer, volume is not scored. The drift accumulator follows the same rule: until the agent's frozen snapshot holds 5 sessions, drift volume is measured against the peer's frozen bands (no peer: no volume term). An empty snapshot made a new agent's first benign session alarm.
+- Responses only narrow: a re-issued token is a subset of the old one, there is no re-issue when nothing would be removed, and an agent's state only moves towards revoked (a DOWN_SCOPE or a drift alarm never softens a quarantine to scoped_down or watch).
+- A call whose credentials failed is never parked as a HOLD, so approving a hold can't run a call the token didn't allow.
+- The simulated agent runtime renews its own token 5 minutes before the 15-minute expiry (same version, new jti). A runtime that was handed a token (D12's thief) can't renew it.
 - **Approve as role change** (HOLD on an off-charter tool): charter v+1 (signed) → token re-issued → snapshot re-frozen → S = 0 → ledger `role_change` with the diff.
 - **Tool-definition hash change** (P1): emit `CharterUpdated`-style "tool version" event; the new version has no history.
 - **FP review:** creates a *proposed* charter edit for human approval. It never auto-widens the baseline.
@@ -259,16 +262,18 @@ State: one Engine per tab via React context + `useSyncExternalStore`. Header: sa
 | Route | Content | Pri |
 |---|---|---|
 | `/` | Landing (built): hero with "stays in its lane" D2 illustration and five chapter tabs · Why (role contrast 69 vs 0) · Slow drift (D6 accumulator chart) · Response ladder · Evidence (ledger hashed in the browser) · gradient CTA · dark footer. ~4.4 screens at 1440×900. | P0 |
-| `/app` Fleet | agent table (role, state, live score, sparkline) · HOLD queue · alerts by factor | P0 |
+| `/app` Fleet | agent table (role, state, token with over-provisioned scopes flagged, baseline confidence, last 24 calls, drift) · incident launcher (D2, D4, D5, D6, D7, D8, D12 played on the live fleet) · HOLD queue with approve / role change / deny · alerts by root cause. **Live (step 3).** | P0 |
 | `/app/investigate/:scenario` | **Signature page.** Left: scenario list. Centre: session graph (React Flow): call nodes with score ring + band chip; the taint edge from the culprit doc highlighted; delegation edges to child agents. Bottom: timeline scrubber (step / autoplay). Right: alert card. | P0 |
-| `/app/alerts/:id` | full alert card (§5.5) + factor bars + token diff + evidence + actions (confirm compromise / mark FP / approve change) | P0 |
-| `/app/agents/:id` | charter (signed, versioned, diff) · token scopes (over-provisioned flagged) · confidence · top transitions · volume bands · score timeline · accumulator chart with H line | P0 |
+| `/app/alerts/:id` | full alert card (§5.5) + factor bars + token diff + evidence + actions (confirm compromise / mark FP / approve change). **Live (step 3)**, with a root-cause filter. | P0 |
+| `/app/agents/:id` | charter (signed, versioned, diff) · token scopes (over-provisioned flagged) · confidence · top transitions · volume bands · score timeline · accumulator chart with H line. **Live (step 3).** | P0 |
 | `/app/graph` | delegation graph across agents | P1 |
-| `/app/ledger` | chain + verify (+ tamper demo) | P1 |
+| `/app/ledger` | chain + verify + tamper demo on a copy. **Live (step 3).** | P1 |
 | `/app/evals` | `public/eval/results.json`: ablations, benign disruption, time-to-detect, latency, expected misses, synthetic banner | P0 |
 | charter editor | drawer on the agent page: add/remove tool → rerun → verdict changes | P1 |
 
 Every number on screen comes from the engine or the eval JSON. `vercel.json` rewrites all paths to `/index.html`.
+
+The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus one benign workday (`packages/scenarios/src/fleet.ts`). Actions run one at a time and the ledger is re-verified after each. The engine is deterministic, so the tab's action log in sessionStorage replays the same sandbox after a reload. Incidents reuse the §6 scripts on the shared fleet. On a fresh fleet they print the §6 numbers exactly, and after a workday they keep their bands (D4 reads 64 instead of 63 because procurement-02 has learned one session); both are tested.
 
 ---
 
@@ -333,7 +338,7 @@ Backup: the Saturday recording. Rehearse once in shadow mode ("would have quaran
 ```bash
 npm test                                      # engine + parity + scenarios green
 node research/sim/fusion_sim.mjs              # D2 69/72, D3 0, D4 63/59/69, D5 37/15, D7 78, D8 100, D12 37/43, benign max 5 (S2 only), D11 26
-npm test                                      # 159 tests; packages/scenarios asserts every §6 row through the real engine
+npm test                                      # 195 tests; scenarios assert every §6 row through the real engine, the console's live store and views are tested too
 node research/sim/drift_acc_sim.mjs           # 0 benign alarms ×3 seeds; D6 at 7; D9 2–8; mimicry miss; D6 per-call max 29
 npm run scenario -- D2                        # explanation matches §5.5 shape
 npm run eval && git diff --stat apps/console/public/eval/results.json

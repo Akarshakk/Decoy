@@ -14,6 +14,21 @@ const input = (over: Partial<RespondInput>): RespondInput => ({
 });
 
 describe('response orchestrator', () => {
+  it('never softens an agent: a DOWN_SCOPE on a quarantined agent leaves it quarantined', () => {
+    const reads = ['docs.read_attachment', 'erp.export_report', 'erp.get_price_list', 'erp.get_vendor', 'erp.search_invoices'];
+    const r = respond(input({ score: 56, agentState: 'quarantined', scopes: reads, tokenVer: 3 }));
+    expect([r.band, r.runs, r.agentStateAfter]).toEqual(['DOWN_SCOPE', false, 'quarantined']);
+  });
+
+  it('never widens a token, and does not re-issue when nothing would be removed', () => {
+    const narrow = ['erp.get_vendor', 'erp.get_price_list'];
+    const q = respond(input({ score: 80, scopes: narrow, tokenVer: 3 }));        // charter reads would add three scopes back
+    expect(q.token.kind).toBe('none');
+    expect(q).toMatchObject({ band: 'QUARANTINE', runs: false, agentStateAfter: 'quarantined' });
+    const d = respond(input({ score: 60, scopes: narrow, tokenVer: 3 }));
+    expect(d.token.kind).toBe('none');
+  });
+
   it('ALLOW runs and changes nothing', () => {
     const r = respond(input({ score: 5 }));
     expect(r).toMatchObject({ band: 'ALLOW', runs: true, escalated: false, token: { kind: 'none' }, agentStateAfter: 'active' });

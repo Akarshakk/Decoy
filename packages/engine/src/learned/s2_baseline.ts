@@ -2,7 +2,8 @@
 // Markov tool-sequence model with Dirichlet back-off to a unigram whose prior is 50/50 charter + peer pooled frequency.
 // S2 strength = max(seq, vol); weight 0.30, so behaviour alone can never block.
 
-const EPS = 0.02, ALPHA = 20, BETA = 5, MIN_OBS = 30, TAU_DEFAULT = 6, CONFIDENCE_K = 20;
+const EPS = 0.02, ALPHA = 20, BETA = 5, MIN_OBS = 30, TAU_DEFAULT = 6;
+export const CONFIDENCE_K = 20;
 
 export class Baseline {
   charter: Set<string>;

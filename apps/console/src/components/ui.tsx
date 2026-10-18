@@ -1,5 +1,6 @@
 import type { ReactNode, ElementType, ComponentPropsWithoutRef } from 'react';
-import { BAND_LABEL, type Band } from '../data/fixtures';
+import type { Band } from '@swaroop/engine';
+import { BAND_LABEL } from '../live/labels';
 
 const BAND_CLASS: Record<Band, string> = {
   ALLOW: 'allow', HOLD: 'hold', DOWN_SCOPE: 'down', QUARANTINE: 'quar', REVOKE: 'revoke',
@@ -19,8 +20,8 @@ export function Frame<T extends ElementType = 'div'>({ as, className = '', child
   );
 }
 
-export function BandChip({ band, prefix }: { band: Band; prefix?: string }) {
-  return <span className={`chip chip-${BAND_CLASS[band]}`}>{prefix}{BAND_LABEL[band]}</span>;
+export function BandChip({ band, prefix, label }: { band: Band; prefix?: string; label?: string }) {
+  return <span className={`chip chip-${BAND_CLASS[band]}`}>{prefix}{label ?? BAND_LABEL[band]}</span>;
 }
 
 export function Kbd({ children }: { children: ReactNode }) {

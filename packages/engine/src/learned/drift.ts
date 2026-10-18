@@ -8,17 +8,19 @@ export const DRIFT_K = 0.5;
 export const DRIFT_H = 5;
 
 export interface Snapshot { baseline: Baseline; volume: VolumeBands }
+/** What one session is measured against: a frozen snapshot, or (cold agent) a snapshot with no volume bands of its own. */
+export interface DriftReference { baseline: Baseline; volume: VolumeBands | null }
 
 export class DriftAccumulator {
   S = 0;
   alarmed = false;
   history: { S: number; x: number; alarm: boolean }[] = [];
 
-  endSession(tools: string[], snap: Snapshot) {
+  endSession(tools: string[], snap: DriftReference) {
     const tau = snap.baseline.tau();
     let seq = 0;
     for (let j = 1; j < tools.length; j++) seq += Math.max(0, snap.baseline.surprise(tools[j - 1]!, tools[j]!) - tau);
-    const x = (tools.length > 1 ? seq / (tools.length - 1) : 0) + snap.volume.excess(tools);
+    const x = (tools.length > 1 ? seq / (tools.length - 1) : 0) + (snap.volume ? snap.volume.excess(tools) : 0);
     this.S = Math.max(0, this.S + x - DRIFT_K);
     const S = this.S, alarm = S > DRIFT_H;
     if (alarm) { this.alarmed = true; this.S = 0; }

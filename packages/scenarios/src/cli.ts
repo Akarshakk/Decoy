@@ -5,7 +5,7 @@ import type { Decision } from '@swaroop/engine';
 const [id = 'D2', ...flags] = process.argv.slice(2);
 const opts = { mode: flags.includes('--shadow') ? 'shadow' as const : 'enforce' as const };
 const run: Record<string, () => Promise<unknown>> = {
-  D1: S.D1, D2: () => S.D2(opts), D3: S.D3, D4: () => S.D4(), D5: S.D5, D6: S.D6, D7: S.D7, D8: S.D8, D9: () => S.D9(), D11: S.D11, D12: S.D12, D13: S.D13,
+  D1: () => S.D1(), D2: () => S.D2(opts), D3: () => S.D3(), D4: () => S.D4(), D5: () => S.D5(), D6: () => S.D6(), D7: () => S.D7(), D8: () => S.D8(), D9: () => S.D9(), D11: () => S.D11(), D12: () => S.D12(), D13: () => S.D13(),
 };
 const fn = run[id.toUpperCase()];
 if (!fn) { console.error(`unknown scenario ${id}; try one of ${Object.keys(run).join(', ')}`); process.exit(1); }

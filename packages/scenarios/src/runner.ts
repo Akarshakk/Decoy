@@ -1,6 +1,9 @@
 // Drives a sandbox the way an agent runtime would: sessions, tokens, calls two minutes apart.
 import type { Decision } from '@swaroop/engine';
+import { TOKEN_TTL_S } from '@swaroop/engine';
 import { AGENT_PROFILES, createSandbox, DAY, DEMO_START, MINUTE, type SandboxOptions } from '@swaroop/world';
+
+const REFRESH_AFTER_MS = TOKEN_TTL_S * 1000 - 5 * MINUTE;   // the runtime renews well before expiry
 
 export type Args = Record<string, string | number>;
 
@@ -18,7 +21,8 @@ export class Run {
   async session(agentId: string, opts: { runtime?: { id: string; asn: string }; jwt?: string } = {}) {
     const runtime = opts.runtime ?? AGENT_PROFILES.find(a => a.id === agentId)!.runtime;
     const jwt = opts.jwt ?? await this.engine.tokenFor(agentId, this.t);
-    return new Session(this, agentId, `${agentId}-s${++this.n}`, runtime, jwt, null);
+    // Only the agent's own runtime can renew; whoever was handed a token (a thief, in D12) keeps that exact copy.
+    return new Session(this, agentId, `${agentId}-s${++this.n}`, runtime, jwt, null, !opts.jwt);
   }
 
   async delegate(parent: Session, calleeId: string) {
@@ -30,10 +34,15 @@ export class Run {
 
 export class Session {
   decisions: Decision[] = [];
+  private issuedAt: number;
   constructor(private run: Run, readonly agentId: string, readonly id: string, readonly runtime: { id: string; asn: string },
-    public jwt: string, readonly parent: string | null) {}
+    public jwt: string, readonly parent: string | null, private renews = false) { this.issuedAt = run.t; }
 
   async call(tool: string, args: Args = {}) {
+    if (this.renews && this.run.t - this.issuedAt >= REFRESH_AFTER_MS) {
+      this.jwt = await this.run.engine.tokenFor(this.agentId, this.run.t);
+      this.issuedAt = this.run.t;
+    }
     const d = await this.run.engine.check({
       callId: `c${this.run.engine.decisions.length + 1}`, agentId: this.agentId, sessionId: this.id, ts: this.run.t,
       jwt: this.jwt, tool, args, runtime: this.runtime,
@@ -43,6 +52,7 @@ export class Session {
     // A re-issued token is handed back to the runtime, which uses it from the next call on.
     if (!this.parent && d.tokenAction.kind === 'reissue' && d.tokenAction.target === 'agent' && d.call.runtime.id === this.runtime.id) {
       this.jwt = this.run.engine.currentToken(this.agentId);
+      this.issuedAt = d.call.ts;
     }
     return d;
   }
