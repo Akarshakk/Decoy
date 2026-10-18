@@ -271,3 +271,17 @@ export const AGENTS = [
 ];
 
 export const decisionId = (scenario: Scenario, i: number) => `${scenario.code.toLowerCase()}_${String(i + 1).padStart(4, '0')}`;
+
+// D6 slow drift under a stolen token: procurement-01 sessions 1–7, research/sim/drift_acc_sim.mjs seed 7
+// (seq + volume). S is the drift accumulator after each session; it crosses H = 5 at session 7.
+// maxCall is the highest single-call score in that session: every call stays below the HOLD line.
+export const DRIFT_H = 5;
+export const DRIFT_D6 = [
+  { session: 1, S: 0, maxCall: 0, exports: 0, calls: 6 },
+  { session: 2, S: 0, maxCall: 0, exports: 0, calls: 6 },
+  { session: 3, S: 0.15, maxCall: 0, exports: 1, calls: 9 },
+  { session: 4, S: 0.49, maxCall: 5, exports: 1, calls: 9 },
+  { session: 5, S: 0.85, maxCall: 5, exports: 1, calls: 8 },
+  { session: 6, S: 4.32, maxCall: 25, exports: 2, calls: 12 },
+  { session: 7, S: 7.7, maxCall: 25, exports: 2, calls: 11 },
+];

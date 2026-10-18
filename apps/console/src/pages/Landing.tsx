@@ -1,41 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { LADDER, scenarioById } from '../data/fixtures';
+import { LADDER, SCENARIOS, scenarioById } from '../data/fixtures';
+import { shortHash, useLedger } from '../data/ledger';
+import { DriftChart } from '../components/DriftChart';
 import { HeroArt } from '../components/HeroArt';
-import { Spine } from '../components/Spine';
-import { BandChip, Frame, Kbd } from '../components/ui';
+import { BandChip, Kbd } from '../components/ui';
 
 const REPO = 'https://github.com/Akarshakk/Decoy';
 const PLAN = `${REPO}/blob/main/plan.md`;
+const SPEC = `${REPO}/blob/main/build_execution.md`;
 const D2 = scenarioById('d2')!;
 const D3 = scenarioById('d3')!;
 
-const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Each chapter owns a tint: its folder tab in the hero and its segment in the header strip.
+const CHAPTERS = [
+  { id: 'why', label: 'Why Swaroop', tint: 'var(--t-paper)' },
+  { id: 'drift', label: 'Slow drift', tint: 'var(--t-yellow)' },
+  { id: 'response', label: 'Response', tint: 'var(--t-peach)' },
+  { id: 'evidence', label: 'Evidence', tint: 'var(--t-sage)' },
+  { id: 'try', label: 'Try it', tint: 'var(--t-mist)' },
+];
 
-// Plays the D2 session once, the first time the replay scrolls into view.
-function useReplay(total: number) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(() => (reducedMotion() ? total : 0));
-  const [started, setStarted] = useState(false);
+function useActiveChapter() {
+  const [active, setActive] = useState<string | null>(null);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([e]) => { if (e?.isIntersecting) { setStarted(true); io.disconnect(); } }, { threshold: 0.4 });
-    io.observe(el);
+    const io = new IntersectionObserver(
+      entries => entries.forEach(e => e.isIntersecting && setActive(e.target.id)),
+      { rootMargin: '-45% 0px -50% 0px' },
+    );
+    CHAPTERS.forEach(c => { const el = document.getElementById(c.id); if (el) io.observe(el); });
     return () => io.disconnect();
   }, []);
-  useEffect(() => {
-    if (!started || visible >= total) return;
-    const t = setTimeout(() => setVisible(v => v + 1), visible === 0 ? 200 : 520);
-    return () => clearTimeout(t);
-  }, [started, visible, total]);
-  return { ref, visible };
+  return active;
 }
 
 export function Landing() {
   const navigate = useNavigate();
-  const replay = useReplay(D2.steps.length);
-  const [selected, setSelected] = useState(3);
+  const active = useActiveChapter();
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -45,6 +46,12 @@ export function Landing() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [navigate]);
+
+  const ledgerEntries = useMemo(
+    () => D2.steps.map((s, seq) => ({ seq, type: 'decision', payload: { agent: s.agent, tool: s.tool, score: s.score, band: s.band } })),
+    [],
+  );
+  const ledger = useLedger(ledgerEntries);
 
   const salary = [
     { who: 'procurement-01', role: 'procurement agent', step: D2.steps[3]!, to: '/app/investigate/d2' },
@@ -61,8 +68,8 @@ export function Landing() {
         <div className="lp-wrap lp-head-in">
           <Link to="/" className="lp-logo"><span className="lp-logo-mark" aria-hidden /><span>Swaroop</span></Link>
           <nav className="lp-nav" aria-label="Primary">
-            <a href="#problem">The problem</a>
-            <a href="#verdict">How a verdict works</a>
+            <a href="#why">Why Swaroop</a>
+            <a href="#drift">Slow drift</a>
             <Link to="/app/investigate/d2">Console</Link>
             <a href={REPO}>GitHub</a>
           </nav>
@@ -71,6 +78,9 @@ export function Landing() {
             <Link to="/app/investigate/d2" className="pill pill-ink">Open console</Link>
           </div>
         </div>
+        <ol className="lp-strip" aria-hidden>
+          {CHAPTERS.map(c => <li key={c.id} style={{ background: c.tint }} className={active === c.id ? 'is-on' : ''} />)}
+        </ol>
       </header>
 
       <section className="lp-hero">
@@ -87,14 +97,24 @@ export function Landing() {
             </p>
             <div className="lp-ctas">
               <Link to="/app/investigate/d2" className="pill pill-ink pill-lg">Run the live demo <Kbd>D</Kbd></Link>
-              <a href="#verdict" className="lp-textlink">See how scoring works</a>
+              <a href="#why" className="lp-textlink">See why credentials aren’t enough</a>
             </div>
           </div>
           <div className="lp-hero-art"><HeroArt /></div>
         </div>
+        <nav className="lp-wrap lp-tabs" aria-label="Chapters">
+          {CHAPTERS.map((c, i) => (
+            <a key={c.id} href={`#${c.id}`} className="lp-tab" style={{ zIndex: CHAPTERS.length - i }}>
+              <svg viewBox="0 0 232 64" preserveAspectRatio="none" aria-hidden>
+                <path d="M0.5 64 V12 Q0.5 0.5 12 0.5 H200 L231.5 64" style={{ fill: c.tint }} vectorEffect="non-scaling-stroke" />
+              </svg>
+              <span>{c.label}</span>
+            </a>
+          ))}
+        </nav>
       </section>
 
-      <section id="problem" className="lp-sec">
+      <section id="why" className="lp-sec">
         <div className="lp-wrap">
           <p className="lp-statement">
             <span className="lp-soft">Credentials prove who an agent is.</span>{' '}
@@ -122,24 +142,29 @@ export function Landing() {
         </div>
       </section>
 
-      <section id="verdict" className="lp-sec lp-sec-alt">
+      <section id="drift" className="lp-sec">
         <div className="lp-wrap">
-          <Frame className="lp-card">
-            <div className="lp-card-text">
-              <h2 className="lp-h2">Watch a hijack get stopped mid-session.</h2>
-              <p>
-                The poisoned PDF is read and marked untrusted. The salary read scores 69 and the token loses its HR
-                scopes. The upload scores 72, a second strike, and the agent is cut to in-role reads. The next price
-                lookup still works.
-              </p>
-              <Link to="/app/investigate/d2" className="pill pill-ink pill-lg">Open the investigation</Link>
-              <p className="lp-fine">Every score explains itself: each factor shows how far the score drops without it. No LLM decides anything.</p>
-            </div>
-            <div className="lp-card-demo" ref={replay.ref}>
-              <Spine scenario={D2} visible={replay.visible} selected={selected} onSelect={setSelected} compact />
-            </div>
-          </Frame>
+          <div className="lp-split">
+            <h2 className="lp-h2 lp-h2-lg">No single call looks wrong. The pattern does.</h2>
+            <p>
+              A stolen token adds one report export at a time. Every call stays under the hold line, so a per-call
+              check never fires. Swaroop keeps a running drift score across sessions against a frozen snapshot of
+              normal, and it doesn’t reset when the session ends.
+            </p>
+          </div>
+          <DriftChart />
+        </div>
+      </section>
 
+      <section id="response" className="lp-sec lp-sec-tight">
+        <div className="lp-wrap">
+          <div className="lp-split">
+            <h2 className="lp-h2 lp-h2-lg">The smallest restriction that removes the risk.</h2>
+            <p>
+              A score picks one of five responses. The down-scoped agent in D2 loses its HR and upload scopes and
+              keeps working: its next price lookup goes through.
+            </p>
+          </div>
           <ol className="lp-ladder" aria-label="Response ladder">
             {LADDER.map(l => (
               <li key={l.band}>
@@ -152,14 +177,77 @@ export function Landing() {
         </div>
       </section>
 
-      <footer className="lp-foot">
-        <div className="lp-wrap lp-foot-in">
-          <span><b>Swaroop</b> · identity drift detection for AI agents</span>
-          <span className="lp-foot-links">
-            <a href={REPO}>GitHub</a><a href={PLAN}>Plan</a><Link to="/app/evals">Evaluations</Link>
-          </span>
+      <section id="evidence" className="lp-dark">
+        <div className="lp-wrap lp-narrow">
+          <ol className="lp-chain" aria-hidden>
+            {ledgerEntries.map((_, i) => (
+              <li key={i} className={i === ledgerEntries.length - 1 ? 'is-head' : ''}>
+                <svg viewBox="0 0 60 36"><rect x=".75" y=".75" width="58.5" height="34.5" rx="6" /><path d="M9 11h30 M9 18h36 M9 25h20" /><circle cx="49" cy="11" r="3.5" /></svg>
+              </li>
+            ))}
+          </ol>
+          <h2 className="lp-dark-h">Every verdict stays on the record.</h2>
+          <div className="lp-dark-cols">
+            <p>
+              Each decision is appended to a hash-chained ledger. Every entry’s hash covers the one before it, so
+              editing any row breaks the chain. IBANs and email addresses are masked before they are hashed.
+            </p>
+            <p className="lp-dark-live">
+              This page just chained the {ledger.count} D2 decisions in your browser.
+              Head <code>{shortHash(ledger.head)}</code>, {ledger.verified ? 'linkage verified.' : 'verifying…'}{' '}
+              <a href={`${SPEC}#54-ledger`}>How the ledger works</a>
+            </p>
+          </div>
         </div>
-        <p className="lp-wrap lp-limits">Known limits: traffic that bypasses the gateway, and an attacker who behaves exactly like the agent’s normal pattern.</p>
+      </section>
+
+      <section id="try" className="lp-cta">
+        <div className="lp-wrap lp-narrow lp-cta-in">
+          <h2 className="lp-cta-h">Watch a hijack get stopped.</h2>
+          <div className="lp-cta-row">
+            <p>
+              Replay D2: a supplier PDF hides an instruction, the salary read scores 69 and is down-scoped, the
+              upload scores 72 and is quarantined, and the next price lookup still works.
+            </p>
+            <Link to="/app/investigate/d2" className="pill pill-ink pill-lg">Open the D2 investigation</Link>
+          </div>
+        </div>
+      </section>
+
+      <footer className="lp-foot">
+        <div className="lp-wrap lp-narrow">
+          <div className="lp-foot-cols">
+            <div>
+              <h3>Console</h3>
+              <Link to="/app/investigate/d2">Investigate</Link>
+              <Link to="/app/fleet">Fleet</Link>
+              <Link to="/app/agents">Agents</Link>
+              <Link to="/app/evals">Evaluations</Link>
+            </div>
+            <div>
+              <h3>Concepts</h3>
+              <a href={PLAN}>Six detectors</a>
+              <a href={`${SPEC}#53-orchestrator`}>Response ladder</a>
+              <a href={`${SPEC}#54-ledger`}>Ledger</a>
+              <a href={`${SPEC}#56-learning-and-change-management`}>Role changes</a>
+            </div>
+            <div>
+              <h3>Scenarios</h3>
+              {SCENARIOS.slice(0, 5).map(s => <Link key={s.id} to={`/app/investigate/${s.id}`}>{s.code} {s.title}</Link>)}
+            </div>
+            <div>
+              <h3>Project</h3>
+              <a href={REPO}>GitHub repository</a>
+              <a href={PLAN}>Plan</a>
+              <a href={SPEC}>Build spec</a>
+              <a href={`${REPO}/blob/main/ui_references.md`}>UI references</a>
+            </div>
+          </div>
+          <div className="lp-foot-base">
+            <span className="lp-logo"><span className="lp-logo-mark" aria-hidden /><span>Swaroop</span></span>
+            <p>Known limits: traffic that bypasses the gateway, and an attacker who behaves exactly like the agent’s normal pattern.</p>
+          </div>
+        </div>
       </footer>
     </div>
   );
