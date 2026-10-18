@@ -1,0 +1,6 @@
+{
+  "name": "@swaroop/world",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts"
+}
