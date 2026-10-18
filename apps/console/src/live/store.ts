@@ -2,12 +2,14 @@
 // injected incidents. Pages subscribe with useSyncExternalStore; every action runs one at a time, in order.
 // The engine is deterministic, so a reload replays the tab's action log (sessionStorage) into the same sandbox.
 import { verifyChain } from '@swaroop/engine';
-import { INCIDENTS, Run, workday } from '@swaroop/scenarios';
+import { INCIDENTS, LEGIT, Run, workday } from '@swaroop/scenarios';
+import { DAY } from '@swaroop/world';
 
 export type Mode = 'enforce' | 'shadow';
 
 type Action =
   | { a: 'workday' } | { a: 'inject'; id: string } | { a: 'mode'; mode: Mode } | { a: 'ownerReset'; agent: string }
+  | { a: 'approveToolVersion'; tool: string } | { a: 'announceBatch'; agent: string; days: number }
   | { a: 'approveHold' | 'denyHold' | 'approveAsRoleChange' | 'markFalsePositive' | 'confirmCompromise'; id: string };
 
 export interface ActionLogStorage { getItem(k: string): string | null; setItem(k: string, v: string): void; removeItem(k: string): void }
@@ -47,7 +49,9 @@ export class LiveStore {
     const e = run.engine;
     switch (x.a) {
       case 'workday': return workday(run);
-      case 'inject': return INCIDENTS.find(i => i.id === x.id)!.play(run);
+      case 'inject': return [...INCIDENTS, ...LEGIT].find(i => i.id === x.id)!.play(run);
+      case 'approveToolVersion': return e.approveToolVersion(x.tool, run.t);
+      case 'announceBatch': return e.announceBatchWindow(x.agent, run.t + x.days * DAY, run.t);
       case 'mode': e.setMode(x.mode); this.state = { ...this.state, mode: x.mode }; return Promise.resolve();
       case 'ownerReset': return e.ownerReset(x.agent, run.t);
       default: return e[x.a](x.id, run.t);
@@ -126,7 +130,7 @@ export class LiveStore {
   workday() { return this.run('Running a workday', { a: 'workday' }); }
 
   inject(id: string) {
-    const inc = INCIDENTS.find(i => i.id === id);
+    const inc = [...INCIDENTS, ...LEGIT].find(i => i.id === id);
     if (!inc) return Promise.reject(new Error(`unknown incident ${id}`));
     return this.run(`Running ${inc.code}: ${inc.title}`, { a: 'inject', id });
   }
@@ -137,4 +141,6 @@ export class LiveStore {
   markFalsePositive(id: string) { return this.run('Marking false positive', { a: 'markFalsePositive', id }); }
   confirmCompromise(id: string) { return this.run('Confirming compromise', { a: 'confirmCompromise', id }); }
   ownerReset(agentId: string) { return this.run('Resetting drift', { a: 'ownerReset', agent: agentId }); }
+  approveToolVersion(tool: string) { return this.run(`Trusting the new ${tool} definition`, { a: 'approveToolVersion', tool }); }
+  announceBatch(agent: string, days: number) { return this.run(`Announcing a ${days}-day batch window`, { a: 'announceBatch', agent, days }); }
 }

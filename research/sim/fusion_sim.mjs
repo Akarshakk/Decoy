@@ -64,6 +64,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // S5 credential context: stolen token replayed from new runtime/ASN at 03:00 while the real agent is active
   show('D12', 'stolen token: new ASN + 03:00 + concurrent use, in-role call', fuse({ S5: nor([0.5, 0.3, 0.6]) }, 1));
   show('D12b', 'stolen token replay (same jti twice)', fuse({ S5: 1 }, 1));
+  // Step-up rules (orchestrator) lift these ALLOW scores to HOLD; the score itself is what the card explains.
+  show('D12c', 'stolen token, daytime, real agent idle: hr.read_salary', fuse({ S5: 0.5 }, 3));
+  show('D14', 'poisoned tool: first call after its definition changed', fuse({ S4: nor([0.5, POISONED_DOC]) }, 1));
+  show('PAY', 'off-charter payment, nothing else (S1 only)', fuse({ S1: S1({ tool: 1, dataSens: 3 }) }, 3));
+  show('PAY3', 'payment to an IBAN first seen in an outside invoice', fuse({ S1: S1({ tool: 1, dataSens: 3 }), S3: S3({ untrustedArg: 1 }) }, 3));
 
   // benign false-positive pressure: held-out sessions, S2 = max(seq, vol)
   const scores = [];

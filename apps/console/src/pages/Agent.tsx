@@ -17,6 +17,8 @@ export function Agent() {
   if (!v || !engine) return <div className="main-col"><header className="topbar"><p className="crumb muted">Loading the sandbox…</p></header></div>;
 
   const { row, charter, baseline, drift } = v;
+  const batchUntil = engine.batchWindowOf(row.id);
+  const profile = engine.profileOf(row.id);
   const maxVol = Math.max(1, ...v.volume.map(b => b.mu + b.sd));
 
   return (
@@ -33,6 +35,7 @@ export function Agent() {
         </p>
         <div className="topbar-actions">
           {drift.alarmed && <button className="btn btn-ink" disabled={!!busy} onClick={() => store.ownerReset(row.id)}>Owner reset: clear drift alarm</button>}
+          {!batchUntil && <button className="btn btn-line" disabled={!!busy} onClick={() => store.announceBatch(row.id, 3)}>Announce a 3-day batch window</button>}
         </div>
       </header>
 
@@ -53,7 +56,8 @@ export function Agent() {
             <h2 className="card-h">Drift accumulator <span className="muted">one point per session, measured against snapshot <span className="mono">{drift.snapshot.id}</span> frozen {fmtDateTime(drift.snapshot.frozenAt)}</span></h2>
             <AccumulatorChart history={drift.history} H={drift.H} />
             <p className="small muted card-foot">
-              {drift.alarmed ? 'Alarm latched: every call adds the drift factor until the owner resets it.' : `Current level ${drift.S.toFixed(2)} of ${drift.H}.`}
+              {drift.alarmed ? 'Alarm latched: until the owner resets it, calls that touch sensitive data or act outside wait for the owner; ordinary work runs.' : `Current level ${drift.S.toFixed(2)} of ${drift.H}.`}
+              {batchUntil ? ` Batch window announced until ${fmtDateTime(batchUntil)}: ordinary volume neither counts as drift nor is learned; sensitive volume still counts.` : ''}
             </p>
           </Frame>
 
@@ -97,6 +101,8 @@ export function Agent() {
                 <div><dt>Surprise p95</dt><dd className="mono">{baseline.tau.toFixed(2)} bits ({baseline.source === 'own' ? 'own' : baseline.source === 'peer' ? `from ${baseline.peer}` : 'default'})</dd></div>
                 <div><dt>Volume</dt><dd className="mono">{v.volume[0]?.source === 'own' ? 'own bands' : v.volume[0]?.source === 'peer' ? `peer bands (${baseline.peer})` : 'not scored yet'}</dd></div>
                 <div><dt>Snapshot</dt><dd className="mono">{drift.snapshot.id}</dd></div>
+                <div><dt>Runtimes</dt><dd className="mono">{profile.knownRuntimes.join(', ')} · {profile.knownAsns.join(', ')}</dd></div>
+                <div><dt>Hours</dt><dd className="mono">{String(profile.activeHours[0]).padStart(2, '0')}–{String(profile.activeHours[1]).padStart(2, '0')}h UTC</dd></div>
               </dl>
             </Frame>
           </div>

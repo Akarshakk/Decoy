@@ -52,6 +52,10 @@ export interface Sink { value: string; fp: string }
 
 // The values a sink call would send data to: the raw argument and its host.
 export async function sinkValues(tool: ToolDef, args: Record<string, string | number>): Promise<Sink[]> {
+  if (tool.sinkArg) {   // a non-host destination (an IBAN): compare it the way extractValues stored it, without spaces
+    const value = String(args[tool.sinkArg] ?? '').replace(/\s+/g, '').toLowerCase();
+    return value ? [{ value, fp: await fingerprint(value) }] : [];
+  }
   if (!tool.egressArg) return [];
   const raw = String(args[tool.egressArg] ?? '').trim().toLowerCase();
   const host = egressHost(tool, args);

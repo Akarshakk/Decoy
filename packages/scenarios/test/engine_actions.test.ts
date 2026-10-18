@@ -75,9 +75,8 @@ describe('engine actions', () => {
   it('owner reset clears the drift latch and the watch state', async () => {
     const run = await Run.create();
     const s = await run.session('procurement-01');
-    await s.call('erp.create_purchase_request', { item: 'A4-80', qty: 10 });
-    await s.call('erp.onboard_supplier', { supplier: 'X' });
-    expect((await s.end())?.alarm).toBe(true);           // one sharply off-baseline session crosses H on its own
+    for (let i = 0; i < 12; i++) await s.call('erp.export_report', { report: 'supplier_spend_q3' });
+    expect((await s.end())?.alarm).toBe(true);           // a burst of sensitive exports crosses H on its own
     expect(run.engine.agent('procurement-01').state).toBe('watch');
     await run.engine.ownerReset('procurement-01', run.t);
     expect(run.engine.agent('procurement-01').state).toBe('active');

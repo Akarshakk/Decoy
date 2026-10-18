@@ -6,7 +6,8 @@ import { canonicalJSON, sha256Hex } from '../crypto';
 export const GENESIS = '0'.repeat(64);
 
 export type LedgerType = 'decision' | 'hold_resolved' | 'role_change' | 'token_reissue' | 'fp_review'
-  | 'compromise_confirmed' | 'drift_alarm' | 'owner_reset';
+  | 'compromise_confirmed' | 'drift_alarm' | 'owner_reset'
+  | 'runtime_registered' | 'tool_changed' | 'tool_approved' | 'batch_window';
 
 export interface LedgerRecord { seq: number; ts: number; type: LedgerType; payload: Record<string, unknown>; prevHash: string; hash: string }
 

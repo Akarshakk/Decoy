@@ -4,7 +4,6 @@ import type { ActionClass, AgentState, Band, Charter, TokenAction, ToolDef } fro
 
 const LADDER: Band[] = ['ALLOW', 'HOLD', 'DOWN_SCOPE', 'QUARANTINE', 'REVOKE'];
 const HIGH_IMPACT: ActionClass[] = ['send_external', 'payment', 'delete'];
-const atLeast = (b: Band, floor: Band) => (LADDER.indexOf(b) >= LADDER.indexOf(floor) ? b : floor);
 const oneUp = (b: Band) => LADDER[Math.min(LADDER.length - 1, LADDER.indexOf(b) + 1)]!;
 const SEVERITY: AgentState[] = ['active', 'watch', 'scoped_down', 'quarantined', 'revoked'];
 const harsher = (a: AgentState, b: AgentState) => (SEVERITY.indexOf(a) >= SEVERITY.indexOf(b) ? a : b);
@@ -22,6 +21,9 @@ export interface RespondInput {
   tokenVer: number;
   catalog: ToolDef[];
   children: string[];                  // delegated child tokens (agent:session) to revoke on REVOKE
+  offCharter?: boolean;                // the tool is not in the agent's charter
+  newRuntime?: boolean;                // the call comes from a runtime or network never seen for this agent
+  unvettedTool?: string | null;        // the tool's definition changed since it was pinned and nobody has reviewed it
 }
 
 export type { TokenAction };
@@ -49,9 +51,17 @@ export function respond(i: RespondInput): Response {
   const highImpact = HIGH_IMPACT.includes(i.action);
   // High-impact invariant (send_external/payment/delete with score ≥30 never auto-runs) holds by construction:
   // the ladder already maps every score ≥30 to HOLD or above. The test suite pins that.
-  if (i.agentState === 'watch' && (highImpact || i.sensitivity >= 2) && band === 'ALLOW') {
-    band = atLeast(band, 'HOLD');
-    invariant = 'agent is on watch after a drift alarm';
+  // Step-up rules: each lifts an ALLOW to HOLD so the owner decides. They never lower a band.
+  const sensitive = highImpact || i.sensitivity >= 2;
+  const stepUp = [
+    i.agentState === 'watch' && sensitive && 'agent is on watch after a drift alarm',
+    i.offCharter && highImpact && 'off-charter tool that can pay, delete or send data outside',
+    i.newRuntime && sensitive && 'sensitive call from a runtime never seen for this agent',
+    i.unvettedTool && `${i.unvettedTool} definition changed since it was pinned; the owner has not reviewed it`,
+  ].filter((x): x is string => !!x);
+  if (stepUp.length && band === 'ALLOW') {
+    band = 'HOLD';
+    invariant = stepUp.join('; ');
   }
 
   let escalated = false, escalationReason: string | undefined;

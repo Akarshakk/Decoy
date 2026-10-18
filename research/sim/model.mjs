@@ -48,7 +48,10 @@ class VolumeBands {
     const mu = xs.reduce((a, b) => a + b, 0) / n, sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / n);
     return { mu, sd: Math.max(sd, 0.25) };              // floor so never-seen tools don't explode
   }
-  // per-session excess z above 2 sigma, summed over tools (input to the drift accumulator)
+  // per-session excess z above 2 sigma, split into ordinary and sensitive tools (drift accumulator input; sensitive is uncapped)
+  excessSplit(s, sensitive) { const c = new Map(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1);
+    let low = 0, high = 0; for (const [t, k] of c) { const { mu, sd } = this.stats(t); const e = Math.max(0, (k - mu) / sd - 2); if (sensitive.has(t)) high += e; else low += e; } return { low, high }; }
+  // per-session excess z above 2 sigma, summed over tools
   excess(s) { const c = new Map(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1);
     let e = 0; for (const [t, k] of c) { const { mu, sd } = this.stats(t); e += Math.max(0, (k - mu) / sd - 2); } return e; }
   // S2 volume strength in [0,1] for the running count of tool t in the current session
@@ -67,4 +70,7 @@ function procSession(r) {
 }
 const train = (b, r, sessions, vb = null) => { for (let i = 0; i < sessions; i++) { const s = procSession(r); vb?.observeSession(s); for (let j = 1; j < s.length; j++) b.observe(s[j - 1], s[j]); } };
 
-export { CATALOG, PROC_V1, PROC_V2, Baseline, VolumeBands, procSession, train, rng };
+// Sensitivity >= 2 or an action that sends outside, pays or deletes (build_execution.md §4.1): excess volume of these is never capped.
+const SENSITIVE = new Set(['erp.export_report', 'hr.read_salary', 'hr.list_employees', 'http.post', 'payments.pay_invoice']);
+
+export { CATALOG, PROC_V1, PROC_V2, SENSITIVE, Baseline, VolumeBands, procSession, train, rng };

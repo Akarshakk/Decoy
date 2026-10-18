@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { verifyChain } from '@swaroop/engine';
 import { DAY } from '@swaroop/world';
-import { INCIDENTS, Run, workday } from '../src';
+import { INCIDENTS, LEGIT, Run, workday } from '../src';
 
 const incident = (id: string) => INCIDENTS.find(i => i.id === id)!;
 const scores = (run: Run) => run.engine.decisions.map(d => d.score);
@@ -124,5 +124,27 @@ describe('incidents after a working week keep their verdicts', () => {
     expect((await after('d8')).ds[0]!.band).toBe('REVOKE');
     const d12 = (await after('d12')).ds;
     expect(d12.slice(1).map(d => d.band)).toEqual(['HOLD', 'HOLD']);
+  });
+});
+
+describe('new incidents and legitimate change on the fleet', () => {
+  it('D14 poisoned tool waits in the hold queue for the owner, with the tool change in the ledger', async () => {
+    const run = await Run.create();
+    await workday(run);
+    await incident('d14').play(run);
+    const pending = [...run.engine.holds.values()].filter(h => h.status === 'pending');
+    expect(pending.map(h => h.decision.call.tool)).toEqual(['erp.get_vendor']);
+    expect(run.engine.unvetted.has('erp.get_vendor')).toBe(true);
+    expect(run.engine.ledgerRecords().map(r => r.type)).toContain('tool_changed');
+  });
+
+  it('a quarter-end batch day runs every call, raises no alert and no drift alarm', async () => {
+    const run = await Run.create();
+    await workday(run);
+    const ds = await LEGIT.find(l => l.id === 'batch')!.play(run) as { band: string; executed: boolean }[];
+    expect(ds.length).toBe(45);
+    expect(ds.every(d => d.band === 'ALLOW' && d.executed)).toBe(true);
+    expect(run.engine.agent('procurement-01').state).toBe('active');
+    expect(run.engine.ledgerRecords().some(r => r.type === 'drift_alarm')).toBe(false);
   });
 });

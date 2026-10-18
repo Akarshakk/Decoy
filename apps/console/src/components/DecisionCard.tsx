@@ -39,6 +39,8 @@ export function DecisionCard({ decision: d, engine, readOnly = false }: { decisi
   const t = d.tokenAction;
   const offCharter = !charter.tools.includes(d.call.tool);
   const fpLogged = follow.some(r => r.type === 'fp_review');
+  const unvetted = engine.unvetted.has(d.call.tool);
+  const newRuntime = d.factors.some(f => f.subs.some(s => s.code === 'new_runtime'));
 
   return (
     <div className="alert">
@@ -147,8 +149,10 @@ export function DecisionCard({ decision: d, engine, readOnly = false }: { decisi
             <button className="btn btn-ink btn-block" disabled={!!busy} onClick={() => store.approveHold(d.id)}>Approve and run</button>
             {offCharter && <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.approveAsRoleChange(d.id)}>Approve as role change (charter v{charter.version + 1})</button>}
             <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.denyHold(d.id)}>Deny</button>
+            {newRuntime && <p className="small muted">Approving also registers <span className="mono">{d.call.runtime.id}</span> ({d.call.runtime.asn}) as a known runtime for {d.call.agentId}.</p>}
           </>
         )}
+        {unvetted && <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.approveToolVersion(d.call.tool)}>Trust the new {d.call.tool} definition</button>}
         {agentState !== 'revoked' && status !== 'shadow' && (
           <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.confirmCompromise(d.id)}>Confirm compromise and revoke</button>
         )}

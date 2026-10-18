@@ -1,11 +1,11 @@
 // Scenario replays for the Investigate page and the landing page. Each one is a fresh sandbox driven by the §6 script;
 // everything shown (scores, tags, taint edges, twins, dividers, drift) is read back off that run's engine.
 import { actionOf, b64urlDecodeText, MULTIPLIER, WEIGHTS, type Decision, type Engine, type Factor } from '@swaroop/engine';
-import { D1, D12, D2, D3, D4, D5, D6, D7, D8, Run } from '@swaroop/scenarios';
+import { D1, D12, D14, D2, D3, D4, D5, D6, D7, D8, Run } from '@swaroop/scenarios';
 import { AGENT_PROFILES, INTERNAL_DOMAINS } from '@swaroop/world';
 
 export type Mode = 'enforce' | 'shadow';
-export type Tag = 'untrusted' | 'still works' | 'delegated' | 'new runtime';
+export type Tag = 'untrusted' | 'still works' | 'delegated' | 'new runtime' | 'changed tool';
 
 export interface StepView {
   decision: Decision;
@@ -54,6 +54,8 @@ const SCENARIOS: (ScenarioMeta & { play: Play; twin?: { from: string; tool: stri
     summary: 'A honeytoken file that no real job ever opens. Touching it is enough.' },
   { id: 'd12', code: 'D12', title: 'Stolen token at night', agent: 'procurement-01', play: D12,
     summary: 'The real agent works at 02:58. A copy of its token is used from a new network at 03:00, then the used token is replayed.' },
+  { id: 'd14', code: 'D14', title: 'Poisoned tool', agent: 'procurement-01', play: D14,
+    summary: 'The ERP tool server re-lists erp.get_vendor with a hidden instruction. Its first call is held; when the owner lets it run, the output still counts as outside content and the salary upload is stopped.' },
 ];
 
 export const SCENARIO_LIST: ScenarioMeta[] = SCENARIOS.map(({ id, code, title, agent, summary }) => ({ id, code, title, agent, summary }));
@@ -135,7 +137,8 @@ async function view(id: string, mode: Mode): Promise<ScenarioView> {
       sessionStart ? 'new session' : null,
     ].filter(Boolean).join(' · ');
     const blockedBefore = ds.slice(0, i).some(x => x.call.sessionId === d.call.sessionId && !x.executed);
-    const tag: Tag | undefined = isDelegated(d) ? 'delegated'
+    const tag: Tag | undefined = d.factors.some(f => f.subs.some(s => s.code === 'tool_definition_changed')) ? 'changed tool'
+      : isDelegated(d) ? 'delegated'
       : untrusted.has(d.call.callId) ? 'untrusted'
       : d.call.runtime.id !== homeRuntime(d.call.agentId) ? 'new runtime'
       : d.executed && d.band === 'ALLOW' && blockedBefore ? 'still works' : undefined;
@@ -143,10 +146,15 @@ async function view(id: string, mode: Mode): Promise<ScenarioView> {
       ...(divider ? { divider: divider[0]!.toUpperCase() + divider.slice(1) } : {}) };
   });
 
-  // Taint: from the untrusted document that a later decision names as its culprit, to every call that names it.
+  // Taint: from the untrusted content (a document, or a changed tool's output) that a later decision names as its
+  // culprit, to every call that names it. The content id comes from the engine's ContentIngested event.
+  const docOf = new Map(e.events.flatMap(ev => (ev.kind === 'ContentIngested' && !ev.trusted ? [[ev.callId, ev.docId] as const] : [])));
   let taint: ScenarioView['taint'] = null;
-  const from = steps.findIndex(s => s.tag === 'untrusted' && steps.some(t => t.decision.culpritDoc === s.arg));
-  if (from >= 0) taint = { from, to: steps.flatMap((s, i) => (i > from && s.decision.culpritDoc === steps[from]!.arg ? [i] : [])) };
+  const from = steps.findIndex(s => { const doc = docOf.get(s.decision.call.callId); return !!doc && steps.some(t => t.decision.culpritDoc === doc); });
+  if (from >= 0) {
+    const doc = docOf.get(steps[from]!.decision.call.callId)!;
+    taint = { from, to: steps.flatMap((s, i) => (i > from && s.decision.culpritDoc === doc ? [i] : [])) };
+  }
 
   const egress = run.backends.log.flatMap(l => {
     const tool = e.catalog.get(l.tool);

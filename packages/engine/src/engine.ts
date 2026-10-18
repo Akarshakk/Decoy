@@ -2,11 +2,12 @@
 // check() follows build_execution.md §5.1: verify token → tripwire → A (S1, S3, S5) → B (S2, S4, S6) → C (drift, fusion,
 // explain) → orchestrator → run the backend only if allowed → emit events → ledger.
 import { signCharter } from './charters';
+import { canonicalJSON, sha256Hex } from './crypto';
 import { s1Role } from './checks/s1_role';
 import { extractValues, newFlowState, recordDataRead, recordIngest, s3Flow, sinkValues, type FlowState } from './checks/s3_flow';
 import { endSession as endCredentialSession, newCredentialState, recordPresentation, s5Credential, type CredentialProfile } from './checks/s5_credential';
 import { actionSummary, explain, FACTOR_LABEL } from './fusion/explain';
-import { fuse, WEIGHTS } from './fusion/fuse';
+import { fuse, nor, WEIGHTS } from './fusion/fuse';
 import { DriftAccumulator, type DriftReference, type Snapshot } from './learned/drift';
 import { Baseline, VolumeBands } from './learned/s2_baseline';
 import { classifyInjection, s4Injection, type InjectionResult } from './learned/s4_injection';
@@ -19,6 +20,8 @@ import type { AAE, Agent, AgentState, Charter, Decision, Factor, FactorResult, S
 
 const DAY_MS = 86_400_000;
 const SNAPSHOT_EVERY_MS = 7 * DAY_MS;
+const REBASELINE_MS = 7 * DAY_MS;    // after an approved role change, the snapshot follows the new normal for a week
+const HIGH_IMPACT = new Set(['send_external', 'payment', 'delete']);
 const MIN_VOLUME_SESSIONS = 5;   // below this, an agent's own volume bands are noise
 
 export interface ToolResult { text?: string; doc?: { id: string; sender: string; senderDomain: string; trusted: boolean }; rows?: number }
@@ -64,6 +67,8 @@ interface AgentRecord {
   lastScore: number;
   snapshots: number;
   peer: string | null;
+  rebaselineUntil: number | null;       // end of the post-role-change window, if one is open
+  batchUntil: number | null;            // end of an owner-announced batch window (quarter-end and the like)
 }
 
 interface SessionState {
@@ -98,11 +103,14 @@ export class Engine {
   private sessions = new Map<string, SessionState>();
   private cred = newCredentialState();
   private edges = new Set<string>();
+  private pinned = new Map<string, string>();                                 // tool → definition hash the owner approved
+  readonly unvetted = new Map<string, { from: string; to: string; ts: number; findings: InjectionResult }>();
   private seq = 0;
   private jtiSeq = 0;
 
   constructor(private cfg: EngineConfig) {
     this.catalog = new Map(cfg.catalog.map(t => [t.name, t]));
+    for (const t of cfg.catalog) this.pinned.set(t.name, t.defHash);
     this.mode = cfg.mode ?? 'enforce';
     this.detectors = cfg.detectors ?? ALL_DETECTORS;
   }
@@ -128,7 +136,7 @@ export class Engine {
       charter, scopes: [...s.scopes], jti: '', jwt: '', removedAt: new Map(),
       profile: { knownRuntimes: [...runtimes], knownAsns: [...asns], activeHours: hours.length ? [pct(0.05), pct(0.95)] : [0, 23] },
       baseline, volume, snapshot: { baseline: baseline.clone(), volume: volume.clone(), id: `bs_${s.id}_1`, frozenAt: nowMs },
-      drift: new DriftAccumulator(), lastScore: 0, snapshots: 1, peer: s.peerOf ?? null,
+      drift: new DriftAccumulator(), lastScore: 0, snapshots: 1, peer: s.peerOf ?? null, rebaselineUntil: null, batchUntil: null,
     };
     this.agents.set(s.id, rec);
     await this.mint(rec, nowMs);
@@ -277,7 +285,19 @@ export class Engine {
         s2Subs.push({ code: 'volume', value: vol, evidence: [], reason: `${tool.name} ×${count} this session vs usual ${mu.toFixed(1)} ± ${sd.toFixed(1)}` });
       }
     }
-    const s4 = s4Injection({ latest: sess.latestUntrusted, seq });
+    const s4: { strength: number; subs: SubSignal[]; culpritDoc?: string } = s4Injection({ latest: sess.latestUntrusted, seq });
+    // A tool whose definition changed since it was pinned is provenance evidence on its own: .5 for the unreviewed change,
+    // combined with what the injection classifier finds in the new description.
+    const changed = this.detectors.factors.includes('S4') ? this.unvetted.get(tool.name) : undefined;
+    if (changed) {
+      const value = nor([0.5, changed.findings.score]);
+      const found = changed.findings.findings.map(f => f.code.replace('_', ' ')).join(', ');
+      s4.subs.push({ code: 'tool_definition_changed', value,
+        reason: `${tool.name} definition changed since it was pinned (${changed.from.slice(0, 8)} → ${changed.to.slice(0, 8)})${found ? `; new description has ${found}` : ''}`,
+        evidence: [`tool:${tool.name}@${changed.to.slice(0, 8)}`, ...changed.findings.findings.map(f => f.evidence)] });
+      s4.strength = nor([s4.strength, value]);
+      s4.culpritDoc = `tool:${tool.name}@${changed.to.slice(0, 8)}`;
+    }
     const s6 = d ? s6Delegation({
       tool, args: call.args, chain: d.chain.map(a => this.rec(a).charter),
       edgeSeen: d.edgeSeen, callerFanOut: this.sessions.get(d.parentSession)?.delegations ?? 0,
@@ -285,7 +305,8 @@ export class Engine {
     }) : { strength: 0, subs: [] as SubSignal[] };
 
     // C: drift, fusion, explanation
-    const da = r.drift.strength();
+    // On watch, only calls that touch sensitive data or act outside wait for the owner; ordinary in-role work goes on.
+    const da = r.drift.strength() && (tool.sensitivity >= 2 || HIGH_IMPACT.has(action)) ? 1 : 0;
     const daSubs: SubSignal[] = da ? [{ code: 'drift_alarm', value: 1, reason: `drift accumulator crossed H; agent on watch until the owner resets it`, evidence: [] }] : [];
     const parts: [Factor, number, SubSignal[]][] = [['S1', s1.strength, s1.subs], ['S2', s2Strength, s2Subs], ['S3', s3.strength, s3.subs],
       ['S4', s4.strength, s4.subs], ['S5', s5.strength, s5.subs], ['S6', s6.strength, s6.subs], ['DA', da, daSubs]];
@@ -301,6 +322,9 @@ export class Engine {
       score: fused.score, action, sensitivity: tool.sensitivity, mode: this.mode, agentState: r.agent.state,
       session: { downScopedAt: sess.downScopedAt }, delegated: !!d, charter, scopes: d ? d.scopes : r.scopes,
       tokenVer: tokenVerBefore, catalog: [...this.catalog.values()], children: this.descendants(sess),
+      offCharter: this.detectors.factors.includes('S1') && !charter.tools.includes(tool.name),
+      newRuntime: this.detectors.factors.includes('S5') && s5.subs.some(x => x.code === 'new_runtime'),
+      unvettedTool: changed ? tool.name : null,
     });
     // A failed token blocks in every mode: that is gateway authentication, not one of Swaroop's restrictions.
     const credentialBlock = !credentials.ok;
@@ -398,9 +422,10 @@ export class Engine {
     const host = sinkHost(tool, call.args, this.cfg.internalDomains);
     if (host) this.events.push({ kind: 'EgressAttempt', callId: call.callId, host });
     if (out.text !== undefined || out.doc) {
-      const trusted = out.doc ? out.doc.trusted : true;
+      // Output of a tool whose definition changed and hasn't been reviewed is outside content, like an external document.
+      const trusted = out.doc ? out.doc.trusted : !(this.detectors.factors.includes('S4') && this.unvetted.has(tool.name));
       const values = extractValues(out.text ?? '');
-      const inj = out.doc && !trusted ? classifyInjection({ text: out.text ?? '', senderDomain: out.doc.senderDomain }) : { score: 0, findings: [] };
+      const inj = !trusted ? classifyInjection({ text: out.text ?? '', senderDomain: out.doc?.senderDomain ?? '' }) : { score: 0, findings: [] };
       const docId = out.doc?.id ?? `${tool.name}:${call.callId}`;
       await recordIngest(sess.flow, { step, docId, trusted, values });
       if (!trusted) sess.latestUntrusted = { docId, ...inj };
@@ -418,22 +443,49 @@ export class Engine {
     if (s.delegation) return null;          // delegated work is the caller's session, not the callee's behaviour
     const r = this.rec(s.agentId);
     const tools = s.tools;
+    // Anti-poisoning: only low-risk sessions teach the baseline.
+    // Inside an announced batch window the work is real but not typical, so it doesn't teach the baseline either.
+    const batch = r.batchUntil !== null && ts <= r.batchUntil;
+    const canLearn = () => !batch && s.peak < 30 && !s.holdDenied && !['watch', 'quarantined', 'revoked'].includes(r.agent.state);
+    let absorbed = false;
+    const learn = () => {
+      r.volume.observeSession(tools);
+      for (let j = 1; j < tools.length; j++) r.baseline.observe(tools[j - 1]!, tools[j]!);
+      absorbed = true;
+    };
+    // For a week after an approved role change the snapshot follows the new normal: learn first, re-freeze, then measure.
+    const rebaselining = r.rebaselineUntil !== null && ts <= r.rebaselineUntil;
+    if (rebaselining && canLearn()) { learn(); this.refreeze(r, ts); }
     // The session whose call the owner just approved as a role change is the new normal, not drift.
     const result = s.roleChangeApproved || !this.detectors.factors.includes('DA') ? { S: r.drift.S, x: 0, alarm: false }
-      : r.drift.endSession(tools, this.driftReference(r));
+      : r.drift.endSession(tools, this.driftReference(r), t => this.isSensitive(t), !batch);
     if (result.alarm) {
       if (r.agent.state === 'active') r.agent.state = 'watch';   // an alarm only ever raises the state, never softens a quarantine
       await this.ledger.append('drift_alarm', { agent: r.agent.id, S: +result.S.toFixed(4), snapshot: r.snapshot.id }, ts);
     }
-    // Anti-poisoning: only low-risk sessions teach the baseline.
-    const absorb = s.peak < 30 && !s.holdDenied && !['watch', 'quarantined', 'revoked'].includes(r.agent.state);
-    if (absorb) {
-      r.volume.observeSession(tools);
-      for (let j = 1; j < tools.length; j++) r.baseline.observe(tools[j - 1]!, tools[j]!);
-    }
+    if (!absorbed && canLearn()) learn();
     // Re-freeze weekly, but never while drift is accumulating (that would let slow drift teach itself into the reference).
-    if (ts - r.snapshot.frozenAt >= SNAPSHOT_EVERY_MS && r.drift.S === 0 && !r.drift.alarmed) this.refreeze(r, ts);
-    return { ...result, absorbed: absorb };
+    if (!rebaselining && ts - r.snapshot.frozenAt >= SNAPSHOT_EVERY_MS && r.drift.S === 0 && !r.drift.alarmed) this.refreeze(r, ts);
+    if (r.rebaselineUntil !== null && ts > r.rebaselineUntil) r.rebaselineUntil = null;
+    if (r.batchUntil !== null && ts > r.batchUntil) r.batchUntil = null;
+    return { ...result, absorbed };
+  }
+
+  /**
+   * The owner says high volume is expected until `until` (quarter-end, a migration). Ordinary in-role volume then neither
+   * counts as drift nor teaches the baseline; sequence changes and sensitive volume still count. Logged in the ledger.
+   */
+  async announceBatchWindow(agentId: string, until: number, ts: number) {
+    const r = this.rec(agentId);
+    r.batchUntil = until;
+    await this.ledger.append('batch_window', { agent: agentId, from: ts, until }, ts);
+  }
+  batchWindowOf(agentId: string) { return this.rec(agentId).batchUntil; }
+
+  /** Sensitive for drift: data of sensitivity ≥ 2, or a tool whose declared action sends outside, pays or deletes. */
+  private isSensitive(name: string) {
+    const t = this.catalog.get(name);
+    return !!t && (t.sensitivity >= 2 || HIGH_IMPACT.has(t.action));
   }
 
   private refreeze(r: AgentRecord, ts: number) {
@@ -454,6 +506,14 @@ export class Engine {
     h.status = 'approved';
     await this.execute(h.decision.call, this.catalog.get(h.decision.call.tool)!, h.step, this.sessions.get(h.decision.call.sessionId)!);
     await this.ledger.append('hold_resolved', { id, outcome: 'approved' }, ts);
+    // Approving a step-up from an unfamiliar runtime vouches for that runtime: the owner is asked once, not on every call.
+    const { agentId, runtime } = h.decision.call;
+    if (h.decision.factors.some(f => f.subs.some(x => x.code === 'new_runtime'))) {
+      const p = this.rec(agentId).profile;
+      if (!p.knownRuntimes.includes(runtime.id)) p.knownRuntimes.push(runtime.id);
+      if (!p.knownAsns.includes(runtime.asn)) p.knownAsns.push(runtime.asn);
+      await this.ledger.append('runtime_registered', { agent: agentId, runtime: runtime.id, asn: runtime.asn, decision: id }, ts);
+    }
   }
 
   async denyHold(id: string, ts: number) {
@@ -474,11 +534,13 @@ export class Engine {
     r.charter = await signCharter({ ...before, version: before.version + 1, tools: [...before.tools, tool],
       dataClasses: before.dataClasses.includes(dc) ? before.dataClasses : [...before.dataClasses, dc] }, this.cfg.registryKey);
     r.baseline.setCharter(r.charter.tools);
+    r.volume.restart(tool);
     if (!r.scopes.includes(tool)) r.scopes = [...r.scopes, tool];
     r.agent.tokenVer++;
     await this.mint(r, ts);
     this.refreeze(r, ts);
     r.drift.reset();
+    r.rebaselineUntil = ts + REBASELINE_MS;
     h.status = 'role_change';
     this.sessions.get(h.decision.call.sessionId)!.roleChangeApproved = true;
     this.events.push({ kind: 'CharterUpdated', role: r.charter.role, version: r.charter.version });
@@ -514,6 +576,34 @@ export class Engine {
     r.drift.reset();
     if (r.agent.state === 'watch') r.agent.state = 'active';
     await this.ledger.append('owner_reset', { agent: agentId }, ts);
+  }
+
+  // ---------- tool definitions (poisoned tool / "rug pull") ----------
+
+  /**
+   * A tool server presents a definition. If it differs from the pinned one, the new version replaces it, calls to it are
+   * held until the owner reviews it, and its output counts as untrusted content.
+   */
+  async updateToolDefinition(spec: Omit<ToolDef, 'defHash'>, ts: number) {
+    const defHash = await sha256Hex(canonicalJSON(spec));
+    const from = this.pinned.get(spec.name) ?? null;
+    if (from === defHash) return null;
+    this.catalog.set(spec.name, { ...spec, defHash });
+    const findings = classifyInjection({ text: spec.description ?? '', senderDomain: '' });
+    this.unvetted.set(spec.name, { from: from ?? 'none', to: defHash, ts, findings });
+    this.events.push({ kind: 'ToolDefinitionChanged', tool: spec.name, from, to: defHash });
+    await this.ledger.append('tool_changed', { tool: spec.name, from: from?.slice(0, 12) ?? null, to: defHash.slice(0, 12),
+      findings: findings.findings.map(f => f.code) }, ts);
+    return this.unvetted.get(spec.name)!;
+  }
+
+  /** The owner reviewed the new definition: pin it. */
+  async approveToolVersion(name: string, ts: number) {
+    const u = this.unvetted.get(name);
+    if (!u) throw new Error(`${name} has no unreviewed definition`);
+    this.pinned.set(name, u.to);
+    this.unvetted.delete(name);
+    await this.ledger.append('tool_approved', { tool: name, hash: u.to.slice(0, 12) }, ts);
   }
 
   setMode(mode: 'enforce' | 'shadow') { this.mode = mode; }

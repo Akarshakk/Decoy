@@ -101,4 +101,31 @@ describe('response orchestrator', () => {
     const r = respond(input({ score: 69, sensitivity: 3, mode: 'shadow' }));
     expect(r).toMatchObject({ band: 'DOWN_SCOPE', enforced: false, runs: true, held: false, token: { kind: 'none' }, agentStateAfter: 'active' });
   });
+
+  // Step-up rules (build_execution.md §5.3): a low score never lets these run unattended.
+  it('an off-charter tool that pays, deletes or sends outside is held even at a low score', () => {
+    const r = respond(input({ score: 29, action: 'payment', sensitivity: 3, offCharter: true }));
+    expect([r.band, r.runs, r.held]).toEqual(['HOLD', false, true]);
+    expect(r.invariant).toMatch(/off-charter/);
+    expect(respond(input({ score: 29, action: 'read', sensitivity: 1, offCharter: true })).band).toBe('ALLOW');
+  });
+
+  it('a runtime never seen for this agent steps up on sensitive or outbound calls only', () => {
+    expect(respond(input({ score: 24, sensitivity: 2, newRuntime: true }))).toMatchObject({ band: 'HOLD', held: true });
+    expect(respond(input({ score: 21, sensitivity: 1, newRuntime: true })).band).toBe('ALLOW');
+    expect(respond(input({ score: 21, action: 'send_external', newRuntime: true })).band).toBe('HOLD');
+  });
+
+  it('a tool whose definition changed since it was pinned is held until the owner reviews it', () => {
+    const r = respond(input({ score: 19, unvettedTool: 'erp.get_vendor' }));
+    expect([r.band, r.held]).toEqual(['HOLD', true]);
+    expect(r.invariant).toMatch(/erp\.get_vendor.*definition changed/);
+  });
+
+  it('step-up rules never lower a band and do nothing in shadow mode beyond the label', () => {
+    expect(respond(input({ score: 80, offCharter: true, action: 'payment', sensitivity: 3 })).band).toBe('QUARANTINE');
+    const sh = respond(input({ score: 10, mode: 'shadow', newRuntime: true, sensitivity: 3 }));
+    expect([sh.band, sh.runs, sh.enforced]).toEqual(['HOLD', true, false]);
+  });
 });
+

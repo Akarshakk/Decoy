@@ -1,6 +1,6 @@
 import { Link } from 'react-router';
 import { DRIFT_H } from '@swaroop/engine';
-import { INCIDENTS } from '@swaroop/scenarios';
+import { INCIDENTS, LEGIT } from '@swaroop/scenarios';
 import { Sparkline } from '../components/charts';
 import { BandChip, Bar, Frame, ScoreRing } from '../components/ui';
 import { CAUSE_LABEL, fmtDateTime, pct, STATE_BAND, STATE_LABEL } from '../live/labels';
@@ -78,6 +78,18 @@ export function Fleet() {
                 </li>
               ))}
             </ul>
+
+            <h2 className="sec-h">Legitimate change</h2>
+            <p className="sec-sub">Unusual but real work. It should run without alerts. The role change request (D5) above is the other half.</p>
+            <ul className="incidents">
+              {LEGIT.map(inc => (
+                <li key={inc.id}>
+                  <span className="inc-code mono">{inc.code}</span>
+                  <span className="inc-body"><b>{inc.title}</b> <span className="mono small muted">{inc.agent}</span><span className="inc-sum">{inc.summary}</span></span>
+                  <button className="btn btn-line" disabled={!!busy || !run} onClick={() => store.inject(inc.id)}>Run</button>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 
@@ -85,16 +97,18 @@ export function Fleet() {
           <h2 className="panel-h">Hold queue <span className="num muted">{holds?.length ?? 0}</span></h2>
           {holds?.length ? (
             <ul className="holds">
-              {holds.map(({ decision: d, offCharter }) => (
+              {holds.map(({ decision: d, offCharter, unvettedTool }) => (
                 <li key={d.id} className="hold">
                   <div className="hold-head">
                     <ScoreRing score={d.score} band={d.band} size={34} />
                     <span><b className="mono">{d.call.tool}</b><span className="cell-sub mono">{d.call.agentId} · {d.id}</span></span>
                   </div>
                   <p className="small">{d.factors.length ? [...d.factors].sort((a, b) => b.looImpact - a.looImpact)[0]!.subs.map(s => s.reason).join('; ') : 'No factor detail.'}</p>
+                  {d.invariant && <p className="small muted">Held because: {d.invariant}.</p>}
                   <div className="hold-actions">
                     <button className="btn btn-ink" disabled={!!busy} onClick={() => store.approveHold(d.id)}>Approve</button>
                     {offCharter && <button className="btn btn-line" disabled={!!busy} onClick={() => store.approveAsRoleChange(d.id)}>Role change</button>}
+                    {unvettedTool && <button className="btn btn-line" disabled={!!busy} onClick={() => store.approveToolVersion(unvettedTool)}>Trust tool version</button>}
                     <button className="btn btn-line" disabled={!!busy} onClick={() => store.denyHold(d.id)}>Deny</button>
                     <Link className="hold-open" to={`/app/alerts/${d.id}`}>Details</Link>
                   </div>

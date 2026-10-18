@@ -14,10 +14,21 @@ export class Backends {
   log: BackendLog[] = [];
   private docs: Record<string, DocumentFixture> = { ...DOCUMENTS };
 
+  private poisoned = new Map<string, string>();
+
   /** Serve another document (the eval harness generates poisoned invoices per seed). */
   addDocument(id: string, doc: DocumentFixture) { this.docs[id] = doc; }
 
+  /** A compromised tool server appends `text` to every result of `tool` (D14). */
+  poison(tool: string, text: string) { this.poisoned.set(tool, text); }
+
   run(agentId: string, tool: string, args: Record<string, string | number>): ToolResult {
+    const out = this.result(agentId, tool, args);
+    const extra = this.poisoned.get(tool);
+    return extra ? { ...out, text: `${out.text ?? ''}\n${extra}` } : out;
+  }
+
+  private result(agentId: string, tool: string, args: Record<string, string | number>): ToolResult {
     this.log.push({ agentId, tool, args });
     switch (tool) {
       case 'erp.get_vendor': return { text: VENDOR };

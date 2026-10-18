@@ -80,7 +80,8 @@ describe('S2 parity with the sim', () => {
       v.observeSession(s); w.observeSession(u);
       for (let j = 1; j < s.length; j++) { m.observe(s[j - 1]!, s[j]!); t.observe(u[j - 1], u[j]); }
       expect(m.clone().tau()).toBe(t.tau());
-      expect(v.clone().stats('mail.send')).toEqual(w.stats('mail.send'));
+      const { mu, sd } = v.clone().stats('mail.send');
+      expect({ mu, sd }).toEqual(w.stats('mail.send'));
     }
   });
 

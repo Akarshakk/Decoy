@@ -10,7 +10,9 @@ export interface ToolDef {
   dataClass: string;
   sensitivity: 0 | 1 | 2 | 3;
   untrustedOutput?: boolean;
-  egressArg?: string;
+  egressArg?: string;        // where the tool sends data (decides internal vs external)
+  sinkArg?: string;          // a destination that is not a host, e.g. the IBAN a payment goes to (S3 taint only)
+  description?: string;      // what the tool server says the tool does; pinned with the rest of the definition
   defHash: string;
 }
 
@@ -70,7 +72,8 @@ export type AAE =
   | { kind: 'EgressAttempt'; callId: string; host: string }
   | { kind: 'Delegation'; from: string; to: string; chain: string[] }
   | { kind: 'TokenPresented'; jti: string; ver: number; runtime: string }
-  | { kind: 'CharterUpdated'; role: string; version: number };
+  | { kind: 'CharterUpdated'; role: string; version: number }
+  | { kind: 'ToolDefinitionChanged'; tool: string; from: string | null; to: string };
 
 export interface SubSignal { code: string; value: number; reason: string; evidence: string[] }
 

@@ -90,11 +90,12 @@ Every action is scored against both, plus data flow, injection provenance, crede
 | Clear risk score + explanation | **C:** Noisy-OR fusion × sensitivity, factor breakdown, leave-one-out impact, evidence IDs, root cause, culprit document. | Alert card on the decision page; identical CLI text. |
 | Restrict without disrupting work | Response Orchestrator ladder + repeat-offence escalation + "quarantine keeps in-role reads". | D2: price lookups still ALLOW after quarantine; other agents untouched. |
 | Indirect prompt injection | **S3** flow/taint + **S4** injection provenance (heuristic content classifier + post-ingestion shift test that names the culprit document). | D2 alert card names `inv-204511.pdf`. |
-| Legitimate change vs drift | Change Management: approve-as-role-change → charter v+1 → re-baseline; FP review proposes charter edits and never silently widens the baseline. | D5: 37 HOLD → approve → 15 ALLOW. |
+| Legitimate change vs drift | Change Management: approve-as-role-change → charter v+1 → 7-day re-baseline; owner-announced batch windows; one unusual day of ordinary work can't alarm alone; on watch only sensitive or outbound calls wait. FP review proposes charter edits and never silently widens the baseline. | D5: 37 HOLD → approve → 15 ALLOW; quarter-end batch day: 45 calls, no alert. |
 | Little or no history | Peer-cohort prior; w = n/(n+k). | D4: new agent, attack still DOWN-SCOPEd (63). |
 | Chains of agents | **S6:** act-chain intersection, new-edge and fan-out, parent risk inherited; restrictions land on the delegated session; 90+ cascades revocation to child agents. | D7: 78 on the delegated session; the mailer's own job still sends. |
 | Evasion (slow / mimicry) | **Drift accumulator:** CUSUM on per-session sequence + volume excess vs a frozen weekly snapshot, reset only by the owner. | D6 caught at session 7, D9 at 2–8; D13 in-distribution mimicry shown as an expected miss. |
-| Stolen token | **S5:** credential context (replay, new runtime/ASN, unusual hours, concurrent use). | D12: 37–43 → step-up. |
+| Stolen token | **S5:** credential context (replay, new runtime/ASN, unusual hours, concurrent use) + a step-up on sensitive calls from a new runtime. | D12: 37–43 → step-up. |
+| Poisoned tool (PS: "a poisoned tool") | **Tool pinning:** definitions pinned by hash; a changed one is held until reviewed, scored by S4 on its description, and its output is untrusted content. | D14: first call held; follow-on exfiltration blocked. |
 
 OWASP Top 10 for Agentic Applications 2026 (published 2025-12-09), for the pitch: ASI01 Agent Goal Hijack (D2), ASI03 Identity & Privilege Abuse (D2, D12), ASI07 Insecure Inter-Agent Communication (D7), ASI10 Rogue Agents (D6/D9).
 
@@ -146,6 +147,7 @@ Property by construction: S2 alone can reach at most 30 (0.30 × m). **Behaviour
 Extra rules:
 - **Repeat offence:** a second call ≥55 in a session that already had a DOWN-SCOPE goes up one rung.
 - **High-impact invariant:** an external send, payment or delete with score ≥30 never auto-runs.
+- **Step-up rules (HOLD):** on watch + sensitive/outbound call · off-charter tool that sends, pays or deletes · sensitive call from a runtime never seen for this agent · a tool whose definition changed since it was pinned.
 - **Shadow mode:** compute and log everything, enforce nothing ("would have …").
 
 ### 6.4 Learning rules
@@ -198,6 +200,7 @@ Extra rules:
 | D11 | 45-call quarter-end session | all ALLOW, **max 26**: the closest benign call to the line |
 | D12 | Stolen token: new ASN + 03:00 + concurrent / replayed jti | **37 / 43 HOLD** (step-up) |
 | D13 | In-distribution mimicry (same tools, same rates, no egress) | **expected miss**, shown honestly |
+| D14 | **Poisoned tool:** the ERP tool server re-lists `erp.get_vendor` with a hidden instruction | first call **HOLD** (changed tool, culprit named); its output is untrusted, so the follow-on salary read and upload are blocked |
 
 ---
 

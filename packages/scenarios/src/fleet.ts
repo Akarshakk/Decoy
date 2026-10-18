@@ -1,8 +1,8 @@
 // The console's live sandbox: one long-lived fleet. Benign workdays keep it busy; incidents are the §6 scripts
 // played on the same Run, so their numbers come from the same engine state the console shows.
-import { AGENT_PROFILES, argsFor, DAY, DEMO_START, hrSession, mailerSession, MINUTE, procSession, rng, type AgentProfile, type Rand } from '@swaroop/world';
+import { AGENT_PROFILES, argsFor, DAY, DEMO_START, hrSession, mailerSession, MINUTE, procSession, quarterEndSession, rng, type AgentProfile, type Rand } from '@swaroop/world';
 import { Run } from './runner';
-import { D12, D2, D4, D5Hold, D6, D7, D8 } from './scenarios';
+import { D12, D14Hold, D2, D4, D5Hold, D6, D7, D8 } from './scenarios';
 
 const GENERATORS: Record<AgentProfile['role'], (r: Rand) => string[]> = { procurement: procSession, hr_assistant: hrSession, mailer: mailerSession };
 const PAUSED = new Set(['quarantined', 'revoked']);
@@ -52,4 +52,23 @@ export const INCIDENTS: Incident[] = [
     summary: 'The HR assistant opens a salary file that no real job ever touches.' },
   { id: 'd12', code: 'D12', title: 'Stolen token at night', agent: 'procurement-01', play: D12,
     summary: 'A copy of the token is used from a new network at 03:00, then replayed.' },
+  { id: 'd14', code: 'D14', title: 'Poisoned tool', agent: 'procurement-01', play: D14Hold,
+    summary: 'The ERP tool server re-lists erp.get_vendor with a hidden instruction in its description and its results.' },
 ];
+
+/** Legitimate but unusual work, to show what the engine does NOT flag. */
+export const LEGIT: Incident[] = [
+  { id: 'batch', code: 'QE', title: 'Quarter-end batch day', agent: 'procurement-01', play: batchDay,
+    summary: 'One 45-call session of vendor batches, about five times the usual. Announce a batch window on the agent page first to cover several days.' },
+];
+
+/** One quarter-end batch session for procurement-01 during working hours. */
+export async function batchDay(run: Run) {
+  const hour = new Date(run.t).getUTCHours();
+  if (hour >= 17 || hour < 9) run.nextDay(10);
+  const s = await run.session('procurement-01');
+  const r = rng(5);
+  for (const t of quarterEndSession().slice(1)) await s.call(t, argsFor(t, r));
+  await s.end();
+  return s.decisions;
+}

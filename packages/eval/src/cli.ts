@@ -8,7 +8,7 @@ import { breakdown, evaluate, SPLITS, type Results } from './harness';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const split = (process.argv.includes('--split') ? process.argv[process.argv.indexOf('--split') + 1] : 'test') as keyof typeof SPLITS;
-if (!(split in SPLITS)) throw new Error(`unknown split ${split}; use dev or test`);
+if (!(split in SPLITS)) throw new Error(`unknown split ${split}; use ${Object.keys(SPLITS).join(', ')}`);
 
 const t0 = performance.now();
 const results = await evaluate({ split, onProgress: m => process.stdout.write(`\r\x1b[K${m}`) });

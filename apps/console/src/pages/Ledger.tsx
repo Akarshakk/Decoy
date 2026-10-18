@@ -16,6 +16,10 @@ function summary(r: LedgerRecord) {
     case 'fp_review': return `${p.decision} marked false positive${p.proposedAddTool ? ` · proposes adding ${p.proposedAddTool}` : ''}`;
     case 'compromise_confirmed': return `${p.agent} revoked after ${p.decision}`;
     case 'owner_reset': return `${p.agent} drift reset by owner`;
+    case 'runtime_registered': return `${p.agent} runtime ${p.runtime} (${p.asn}) registered after ${p.decision}`;
+    case 'tool_changed': return `${p.tool} definition changed ${p.from ?? 'none'} → ${p.to}${(p.findings as string[]).length ? ` · ${(p.findings as string[]).join(', ')}` : ''}`;
+    case 'tool_approved': return `${p.tool} definition ${p.hash} trusted by owner`;
+    case 'batch_window': return `${p.agent} batch window until ${new Date(Number(p.until)).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
   }
 }
 

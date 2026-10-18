@@ -70,6 +70,7 @@ export function pendingHolds(e: Engine) {
   return [...e.holds.values()].filter(h => h.status === 'pending').map(h => ({
     decision: h.decision,
     offCharter: !e.charterOf(h.decision.call.agentId).tools.includes(h.decision.call.tool),
+    unvettedTool: e.unvetted.has(h.decision.call.tool) ? h.decision.call.tool : null,
   }));
 }
 

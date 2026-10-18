@@ -1,6 +1,7 @@
 // Drift accumulator (Phase II-C): CUSUM on per-session excess vs a FROZEN snapshot.
-// Input x = mean excess surprise bits per call (sequence) + Σ volume z-excess above 2σ (volume bands).
-import { PROC_V1, Baseline, VolumeBands, procSession, train, rng } from './model.mjs';
+// Input x = min(H, mean excess surprise bits per call + Σ ordinary-tool volume z-excess above 2σ) + Σ sensitive-tool excess.
+// The cap: one unusual day of ordinary in-role work (a quarter-end batch) can't alarm alone; sensitive volume can.
+import { PROC_V1, SENSITIVE, Baseline, VolumeBands, procSession, train, rng } from './model.mjs';
 const r = rng(42);
 const vb = new VolumeBands(); const frozen = new Baseline(PROC_V1); train(frozen, r, 40, vb);   // procurement-01 snapshot
 const tau = frozen.tau();
@@ -8,7 +9,8 @@ const seqX = s => { let e = 0; for (let j = 1; j < s.length; j++) e += Math.max(
 const K = 0.5, H = 5;
 function run(label, mk, n, seed, useVol) {
   const a = rng(seed); let S = 0, first = null, alarms = 0;
-  for (let i = 1; i <= n; i++) { const s = mk(a, i); S = Math.max(0, S + seqX(s) + (useVol ? vb.excess(s) : 0) - K);
+  for (let i = 1; i <= n; i++) { const s = mk(a, i); const v = useVol ? vb.excessSplit(s, SENSITIVE) : { low: 0, high: 0 };
+    S = Math.max(0, S + Math.min(H, seqX(s) + v.low) + v.high - K);
     if (S > H) { alarms++; first ??= i; S = 0; } }
   return { first, alarms };
 }
@@ -32,3 +34,9 @@ import('./fusion_sim.mjs').then(({ fuse }) => {
   console.log(`D6 per-call max score over 30 sessions: ${mx} (must stay < 30)`);
 });
 const m = run('mimic', inRate, 40, 3, true); console.log(`true in-rate mimicry: first=${m.first} (expected miss)`);
+// One-day bursts: a 45-call quarter-end batch (ordinary tools) vs 12 exports in one session (sensitive).
+const d11 = ['START']; const z = rng(5);
+while (d11.length < 46) { d11.push('erp.get_vendor', 'erp.get_price_list'); for (let k = 0; k < 2; k++) d11.push(z() < 0.5 ? 'erp.search_invoices' : 'erp.get_price_list'); d11.push('erp.create_purchase_request'); }
+const one = s => { const v = vb.excessSplit(s, SENSITIVE); return Math.max(0, Math.min(H, seqX(s) + v.low) + v.high - K); };
+console.log(`quarter-end batch alone: S = ${one(d11).toFixed(2)} (alarm only above ${H})`);
+console.log(`12 exports in one session: S = ${one(['START', ...Array(12).fill('erp.export_report')]).toFixed(2)}`);

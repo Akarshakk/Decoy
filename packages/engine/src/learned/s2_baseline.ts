@@ -62,26 +62,43 @@ export class Baseline {
 }
 
 // Volume bands: per-tool count per session. Fit = plain mean/std over training sessions.
+export const MIN_FRESH_SESSIONS = 5;   // a tool added by a role change has no volume band until it has this many sessions
+
 export class VolumeBands {
   sessions: Map<string, number>[] = [];
-  private cache = new Map<string, { mu: number; sd: number }>();   // per tool; cleared when a session is learned
+  private since = new Map<string, number>();   // tool → first session that counts (set when a role change adds the tool)
+  private cache = new Map<string, { mu: number; sd: number; known: boolean }>();   // per tool; cleared when a session is learned
   observeSession(s: string[]) { const c = new Map<string, number>(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1); this.sessions.push(c); this.cache.clear(); }
+  /** The tool just joined the role: sessions before now say nothing about how often the role uses it. */
+  restart(t: string) { this.since.set(t, this.sessions.length); this.cache.delete(t); }
   stats(t: string) {
     let hit = this.cache.get(t);
     if (!hit) { hit = this.fit(t); this.cache.set(t, hit); }
     return hit;
   }
   private fit(t: string) {
-    const xs = this.sessions.map(c => c.get(t) ?? 0), n = xs.length || 1;
+    const xs = this.sessions.slice(this.since.get(t) ?? 0).map(c => c.get(t) ?? 0), n = xs.length || 1;
     const mu = xs.reduce((a, b) => a + b, 0) / n, sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / n);
-    return { mu, sd: Math.max(sd, 0.25) };   // floor so never-seen tools don't explode
+    // floor so never-seen tools don't explode; a restarted tool is unknown until it has MIN_FRESH_SESSIONS sessions
+    return { mu, sd: Math.max(sd, 0.25), known: !this.since.has(t) || xs.length >= MIN_FRESH_SESSIONS };
   }
-  // Per-session excess z above 2σ, summed over tools (input to the drift accumulator).
+  // Per-session excess z above 2σ, split by whether the tool touches sensitive data or acts outside (input to the drift accumulator).
+  excessSplit(s: string[], sensitive: (tool: string) => boolean) {
+    const c = new Map<string, number>(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1);
+    let low = 0, high = 0;
+    for (const [t, k] of c) {
+      const { mu, sd, known } = this.stats(t);
+      const e = known ? Math.max(0, (k - mu) / sd - 2) : 0;
+      if (sensitive(t)) high += e; else low += e;
+    }
+    return { low, high };
+  }
+  // Per-session excess z above 2σ, summed over tools.
   excess(s: string[]) {
     const c = new Map<string, number>(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1);
-    let e = 0; for (const [t, k] of c) { const { mu, sd } = this.stats(t); e += Math.max(0, (k - mu) / sd - 2); } return e;
+    let e = 0; for (const [t, k] of c) { const { mu, sd, known } = this.stats(t); if (known) e += Math.max(0, (k - mu) / sd - 2); } return e;
   }
   // S2 volume strength in [0,1] for the running count k of tool t in the current session.
-  vol(t: string, k: number) { const { mu, sd } = this.stats(t); return Math.max(0, Math.min(1, ((k - mu) / sd - 3) / 3)); }
-  clone(): VolumeBands { const v = new VolumeBands(); v.sessions = this.sessions.map(c => new Map(c)); return v; }
+  vol(t: string, k: number) { const { mu, sd, known } = this.stats(t); return known ? Math.max(0, Math.min(1, ((k - mu) / sd - 3) / 3)) : 0; }
+  clone(): VolumeBands { const v = new VolumeBands(); v.sessions = this.sessions.map(c => new Map(c)); v.since = new Map(this.since); return v; }
 }

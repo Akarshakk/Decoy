@@ -6,7 +6,7 @@ const scores = (v: { steps: { decision: { score: number } }[] }) => v.steps.map(
 
 describe('scenario views', () => {
   it('lists the scenarios the console can replay', () => {
-    expect(SCENARIO_LIST.map(s => s.id)).toEqual(['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd12']);
+    expect(SCENARIO_LIST.map(s => s.id)).toEqual(['d1', 'd2', 'd3', 'd4', 'd5', 'd6', 'd7', 'd8', 'd12', 'd14']);
   });
 
   it('D2: §6 scores, the untrusted PDF, the taint edges into the two blocked calls, and the in-role call that still works', async () => {
@@ -62,6 +62,15 @@ describe('scenario views', () => {
   it('D12: the thief’s calls are tagged as a new runtime', async () => {
     const v = await runScenario('d12');
     expect(v.steps.map(s => [s.decision.score, s.tag ?? null])).toEqual([[13, null], [37, 'new runtime'], [43, 'new runtime']]);
+  });
+
+  it('D14: the changed tool is tagged and held, and the taint thread runs from its output to the blocked salary read and upload', async () => {
+    const v = await runScenario('d14');
+    expect(v.steps[0]!.tag).toBe('changed tool');
+    expect(v.steps[0]!.decision.band).toBe('HOLD');
+    expect(v.taint).toEqual({ from: 0, to: [1, 2] });
+    expect(v.steps.slice(1, 3).map(s => s.decision.executed)).toEqual([false, false]);
+    expect(v.egress).toEqual([]);
   });
 
   it('caches runs: the same scenario and mode is played once', async () => {
