@@ -1,0 +1,13 @@
+{
+  "name": "decoy",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @swaroop/console",
+    "build": "npm run build -w @swaroop/console"
+  }
+}
