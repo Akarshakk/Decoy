@@ -11,6 +11,7 @@ export class Baseline {
   uni = new Map<string, number>();
   bi = new Map<string, Map<string, number>>();
   surprises: number[] = [];
+  private sorted: number[] = [];            // the same surprises kept in order, so τ is a lookup, not a sort per session
 
   constructor(charterTools: string[], readonly catalog: string[], readonly peer: Baseline | null = null) {
     this.charter = new Set(charterTools);
@@ -31,12 +32,16 @@ export class Baseline {
   }
   surprise(prev: string, t: string) { return -Math.log2(this.pBi(prev, t)); }
   observe(prev: string, t: string) {
-    this.surprises.push(this.surprise(prev, t)); this.n++;
+    const x = this.surprise(prev, t);
+    this.surprises.push(x); this.n++;
+    let lo = 0, hi = this.sorted.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.sorted[mid]! <= x) lo = mid + 1; else hi = mid; }
+    this.sorted.splice(lo, 0, x);
     this.uni.set(t, (this.uni.get(t) ?? 0) + 1);
     const row = this.bi.get(prev) ?? new Map<string, number>(); row.set(t, (row.get(t) ?? 0) + 1); this.bi.set(prev, row);
   }
   tau(): number {
-    if (this.surprises.length >= MIN_OBS) { const s = [...this.surprises].sort((a, b) => a - b); return s[Math.floor(0.95 * (s.length - 1))]!; }
+    if (this.sorted.length >= MIN_OBS) return this.sorted[Math.floor(0.95 * (this.sorted.length - 1))]!;
     return this.peer ? this.peer.tau() : TAU_DEFAULT;
   }
   // S2 sequence strength in [0,1]: 10 bits above τ saturates.
@@ -51,6 +56,7 @@ export class Baseline {
     b.uni = new Map(this.uni);
     b.bi = new Map([...this.bi].map(([k, row]) => [k, new Map(row)]));
     b.surprises = [...this.surprises];
+    b.sorted = [...this.sorted];
     return b;
   }
 }
@@ -58,8 +64,14 @@ export class Baseline {
 // Volume bands: per-tool count per session. Fit = plain mean/std over training sessions.
 export class VolumeBands {
   sessions: Map<string, number>[] = [];
-  observeSession(s: string[]) { const c = new Map<string, number>(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1); this.sessions.push(c); }
+  private cache = new Map<string, { mu: number; sd: number }>();   // per tool; cleared when a session is learned
+  observeSession(s: string[]) { const c = new Map<string, number>(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1); this.sessions.push(c); this.cache.clear(); }
   stats(t: string) {
+    let hit = this.cache.get(t);
+    if (!hit) { hit = this.fit(t); this.cache.set(t, hit); }
+    return hit;
+  }
+  private fit(t: string) {
     const xs = this.sessions.map(c => c.get(t) ?? 0), n = xs.length || 1;
     const mu = xs.reduce((a, b) => a + b, 0) / n, sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / n);
     return { mu, sd: Math.max(sd, 0.25) };   // floor so never-seen tools don't explode

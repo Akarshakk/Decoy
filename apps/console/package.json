@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@swaroop/engine": "*",
+    "@swaroop/eval": "*",
     "@swaroop/scenarios": "*",
     "@swaroop/world": "*",
     "react": "^19.3.1",

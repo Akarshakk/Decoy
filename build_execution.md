@@ -269,6 +269,7 @@ State: one Engine per tab via React context + `useSyncExternalStore`. Header: sa
 | `/app/graph` | delegation graph across agents | P1 |
 | `/app/ledger` | chain + verify + tamper demo on a copy. **Live (step 3).** | P1 |
 | `/app/evals` | `public/eval/results.json`: ablations, benign disruption, time-to-detect, latency, expected misses, synthetic banner | P0 |
+| | **Live (step 5):** catch matrix (families × detector sets, Wilson whiskers), stop position per attack call, sessions-to-detect histograms, benign cohorts, latency histogram, weaknesses derived from the run, and a button that replays seeds 2000–2004 in the browser and diffs them with the file. A test fails if the committed file no longer matches the engine. | |
 | charter editor | drawer on the agent page: add/remove tool → rerun → verdict changes | P1 |
 
 Every number on screen comes from the engine or the eval JSON. `vercel.json` rewrites all paths to `/index.html`.
@@ -284,6 +285,10 @@ The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus on
 - **Configs:** credentials-only · S1-only · S2-only · A-only (S1+S3+S5) · full.
 - **Metrics:** stopped-before-damage % (Wilson 95% CI) · benign sessions with HOLD+ % · benign calls blocked % · calls/sessions to detect · latency p50/p95 for A-only and full over ≥10k calls.
 - **Output:** `apps/console/public/eval/results.json` + `reports/eval.md`.
+- **Implementation (`packages/eval`):** `EngineConfig.detectors` switches factors and the tripwire off inside the real engine; the credential gate always runs (it is the "credentials only" baseline). Each trial is a pure function of its seed: the seed picks the variant (agent, injection style, channel, timing…) and the engine decides. Five injection styles, one of them (`plain-business`) written to score 0 on the S4 classifier. Payment redirection has no egress argument, so S3 never sees it: inline-only catches 0% of it, by design of §4.1, and the report says so.
+- **Caught:** the attacker's goal never ran (single-session families), or a drift alarm / stopped call within the horizon (30 or 40 daily sessions). Benign session flagged: any call HOLD or worse, any call not run, or a drift alarm at its end.
+- **Latency:** one run of the full engine over ≥10k benign calls after a 2k-call warm-up: inline (token + S1/S3/S5) and whole decision (adds S2/S4/S6, drift, fusion, explanation, backend and fingerprinting). τ is kept in a sorted list and volume stats are cached per tool; before that, τ re-sorted the whole history on the first call of every session (p50 770 µs after 200 days; now ~50–70 µs).
+- **What the first test run found (not tuned away):** quarter-end batches raise a drift alarm in 100% of sessions (one 40–55 call session crosses H alone); after an approved role change, onboarding keeps adding to S against the snapshot frozen at approval and the weekly refreeze waits for S = 0, so 31 alarms in 200 sessions and every call held while on watch; stolen tokens used in daytime from a known-looking runtime with the real agent idle get through ~10%.
 
 ---
 
@@ -338,10 +343,10 @@ Backup: the Saturday recording. Rehearse once in shadow mode ("would have quaran
 ```bash
 npm test                                      # engine + parity + scenarios green
 node research/sim/fusion_sim.mjs              # D2 69/72, D3 0, D4 63/59/69, D5 37/15, D7 78, D8 100, D12 37/43, benign max 5 (S2 only), D11 26
-npm test                                      # 207 tests; scenarios assert every §6 row through the real engine, the console's live store and views are tested too
+npm test                                      # 233 tests; scenarios assert every §6 row through the real engine, the console's live store and views are tested too
 node research/sim/drift_acc_sim.mjs           # 0 benign alarms ×3 seeds; D6 at 7; D9 2–8; mimicry miss; D6 per-call max 29
 npm run scenario -- D2                        # explanation matches §5.5 shape
-npm run eval && git diff --stat apps/console/public/eval/results.json
+npm run eval && git diff --stat apps/console/public/eval/results.json   # ~90 s; apps/console/test/evals.test.ts fails if the committed file is stale
 npm run build && npx vite preview             # click every P0 route; no console errors
 # after deploy: fresh incognito window → run D2, D5, D6, D7 end to end
 ```

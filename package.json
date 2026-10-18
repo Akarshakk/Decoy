@@ -10,8 +10,9 @@
     "dev": "npm run dev -w @swaroop/console",
     "build": "npm run build -w @swaroop/console",
     "test": "vitest run",
-    "typecheck": "tsc -p packages/engine && tsc -p packages/world && tsc -p packages/scenarios && tsc -p apps/console",
-    "scenario": "tsx packages/scenarios/src/cli.ts"
+    "typecheck": "tsc -p packages/engine && tsc -p packages/world && tsc -p packages/scenarios && tsc -p packages/eval && tsc -p apps/console",
+    "scenario": "tsx packages/scenarios/src/cli.ts",
+    "eval": "tsx packages/eval/src/cli.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

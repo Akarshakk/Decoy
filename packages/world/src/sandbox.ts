@@ -1,5 +1,5 @@
 // One fresh sandbox = one Engine with the demo world loaded. Every console tab and every scenario gets its own.
-import { Engine } from '@swaroop/engine';
+import { Engine, type Detectors } from '@swaroop/engine';
 import { AGENT_PROFILES, type AgentProfile } from './agents';
 import { Backends } from './backends';
 import { buildCatalog, HONEYTOKEN, INTERNAL_DOMAINS } from './catalog';
@@ -13,7 +13,7 @@ const TOKEN_KEY = 'swaroop-demo-sandbox-key';             // demo key; the conso
 
 const GENERATORS: Record<AgentProfile['role'], (r: Rand) => string[]> = { procurement: procSession, hr_assistant: hrSession, mailer: mailerSession };
 
-export interface SandboxOptions { mode?: 'enforce' | 'shadow'; peers?: boolean }
+export interface SandboxOptions { mode?: 'enforce' | 'shadow'; peers?: boolean; detectors?: Detectors }
 
 // History: n benign sessions on the n days before DEMO_START. Content from rng(seed) (identical to the sim);
 // timing from a separate stream so it can't perturb the content.
@@ -31,7 +31,7 @@ export async function createSandbox(opts: SandboxOptions = {}) {
   const backends = new Backends();
   const engine = new Engine({
     catalog: await buildCatalog(), internalDomains: INTERNAL_DOMAINS, honeytokens: [HONEYTOKEN],
-    tokenKey: TOKEN_KEY, registryKey: REGISTRY_KEY, backend: backends, mode: opts.mode ?? 'enforce',
+    tokenKey: TOKEN_KEY, registryKey: REGISTRY_KEY, backend: backends, mode: opts.mode ?? 'enforce', detectors: opts.detectors,
   });
   const warm = (role: string) => AGENT_PROFILES.find(a => a.role === role && a.historySessions > 0);
   for (const p of AGENT_PROFILES) {

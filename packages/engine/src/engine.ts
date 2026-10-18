@@ -32,7 +32,12 @@ export interface EngineConfig {
   registryKey: string;
   backend: Backend;
   mode?: 'enforce' | 'shadow';
+  detectors?: Detectors;
 }
+
+/** Which detectors score (ablations, build_execution.md §8). The credential gate is not a detector: it always runs. */
+export interface Detectors { factors: Factor[]; tripwire: boolean }
+export const ALL_DETECTORS: Detectors = { factors: ['S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'DA'], tripwire: true };
 
 export interface AgentSetup {
   id: string;
@@ -83,6 +88,7 @@ export interface Hold { decision: Decision; step: number; status: 'pending' | 'a
 
 export class Engine {
   readonly catalog: Map<string, ToolDef>;
+  readonly detectors: Detectors;
   mode: 'enforce' | 'shadow';
   readonly ledger = new Ledger();
   readonly events: AAE[] = [];
@@ -98,6 +104,7 @@ export class Engine {
   constructor(private cfg: EngineConfig) {
     this.catalog = new Map(cfg.catalog.map(t => [t.name, t]));
     this.mode = cfg.mode ?? 'enforce';
+    this.detectors = cfg.detectors ?? ALL_DETECTORS;
   }
 
   // ---------- setup ----------
@@ -242,7 +249,7 @@ export class Engine {
     this.events.push({ kind: 'TokenPresented', jti, ver: v.claims?.ver ?? 0, runtime: call.runtime.id });
 
     // 2. tripwire
-    const honeytoken = this.cfg.honeytokens.find(h => Object.values(call.args).some(a => String(a).includes(h)));
+    const honeytoken = !this.detectors.tripwire ? undefined : this.cfg.honeytokens.find(h => Object.values(call.args).some(a => String(a).includes(h)));
 
     // 3. A: inline deterministic checks
     const action = actionOf(tool, call.args, this.cfg.internalDomains);
@@ -282,6 +289,7 @@ export class Engine {
     const daSubs: SubSignal[] = da ? [{ code: 'drift_alarm', value: 1, reason: `drift accumulator crossed H; agent on watch until the owner resets it`, evidence: [] }] : [];
     const parts: [Factor, number, SubSignal[]][] = [['S1', s1.strength, s1.subs], ['S2', s2Strength, s2Subs], ['S3', s3.strength, s3.subs],
       ['S4', s4.strength, s4.subs], ['S5', s5.strength, s5.subs], ['S6', s6.strength, s6.subs], ['DA', da, daSubs]];
+    for (const p of parts) if (!this.detectors.factors.includes(p[0])) { p[1] = 0; p[2] = []; }   // switched off: scores nothing
     const fused = fuse(Object.fromEntries(parts.map(([f, s]) => [f, s])), { sensitivity: tool.sensitivity, egress: action === 'send_external', honeytoken: !!honeytoken });
     const factors: FactorResult[] = honeytoken ? [] : parts.filter(([, s]) => s > 0).map(([factor, strength, subs]) => ({
       factor, strength, weighted: WEIGHTS[factor] * strength, looImpact: fused.loo[factor] ?? 0, subs,
@@ -411,7 +419,8 @@ export class Engine {
     const r = this.rec(s.agentId);
     const tools = s.tools;
     // The session whose call the owner just approved as a role change is the new normal, not drift.
-    const result = s.roleChangeApproved ? { S: r.drift.S, x: 0, alarm: false } : r.drift.endSession(tools, this.driftReference(r));
+    const result = s.roleChangeApproved || !this.detectors.factors.includes('DA') ? { S: r.drift.S, x: 0, alarm: false }
+      : r.drift.endSession(tools, this.driftReference(r));
     if (result.alarm) {
       if (r.agent.state === 'active') r.agent.state = 'watch';   // an alarm only ever raises the state, never softens a quarantine
       await this.ledger.append('drift_alarm', { agent: r.agent.id, S: +result.S.toFixed(4), snapshot: r.snapshot.id }, ts);

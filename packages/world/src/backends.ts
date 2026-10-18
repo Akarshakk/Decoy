@@ -1,6 +1,6 @@
 // Simulated tool backends. They return realistic payloads so the engine's data-flow and injection checks see real
 // content, and they keep a log so scenarios can assert what actually left the building (e.g. D2: 0 POSTs).
-import { DOCUMENTS } from './fixtures';
+import { DOCUMENTS, type DocumentFixture } from './fixtures';
 import { INTERNAL_DOMAINS } from './catalog';
 import type { Rand } from './sessions';
 
@@ -12,6 +12,10 @@ const VENDOR = 'Vendor V-118 Nordwind Supplies GmbH, sales@nordwind-supplies.exa
 
 export class Backends {
   log: BackendLog[] = [];
+  private docs: Record<string, DocumentFixture> = { ...DOCUMENTS };
+
+  /** Serve another document (the eval harness generates poisoned invoices per seed). */
+  addDocument(id: string, doc: DocumentFixture) { this.docs[id] = doc; }
 
   run(agentId: string, tool: string, args: Record<string, string | number>): ToolResult {
     this.log.push({ agentId, tool, args });
@@ -24,7 +28,7 @@ export class Backends {
       case 'erp.onboard_supplier': return { text: `Supplier ${args.supplier ?? ''} onboarded` };
       case 'docs.read_attachment': {
         const id = String(args.file);
-        const d = DOCUMENTS[id];
+        const d = this.docs[id];
         if (!d) return { text: '' };
         const trusted = INTERNAL_DOMAINS.some(dom => d.senderDomain === dom || d.senderDomain.endsWith(`.${dom}`));
         return { text: d.text, doc: { id, sender: d.sender, senderDomain: d.senderDomain, trusted } };

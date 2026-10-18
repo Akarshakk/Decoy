@@ -57,22 +57,6 @@ function Shell() {
   );
 }
 
-export function Planned({ page }: { page: string }) {
-  const PLANNED: Record<string, string> = {
-    evals: 'Ablations, benign disruption, time to detect, latency and expected misses from the eval harness.',
-  };
-  return (
-    <div className="main-col">
-      <header className="topbar"><p className="crumb"><b>{NAV.find(n => n.to.endsWith(page))?.label ?? page}</b></p></header>
-      <div className="empty">
-        <p className="empty-h">Not built yet.</p>
-        <p>{PLANNED[page]}</p>
-        <p><Link to="/app/fleet" className="btn btn-ink">Open the fleet</Link></p>
-      </div>
-    </div>
-  );
-}
-
 /** Enforce/Shadow switch, workday and reset: the sandbox controls shared by the live pages. */
 export function SandboxControls() {
   const { store, mode, busy } = useLive();

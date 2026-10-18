@@ -2,7 +2,8 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router';
 import { Landing } from './pages/Landing';
-import { ConsoleShell, Planned } from './pages/Console';
+import { ConsoleShell } from './pages/Console';
+import { Evals } from './pages/Evals';
 import { Investigate } from './pages/Investigate';
 import { Fleet } from './pages/Fleet';
 import { Agent } from './pages/Agent';
@@ -25,7 +26,7 @@ createRoot(document.getElementById('root')!).render(
           <Route path="alerts" element={<Alerts />} />
           <Route path="alerts/:id" element={<Alerts />} />
           <Route path="ledger" element={<Ledger />} />
-          <Route path="evals" element={<Planned page="evals" />} />
+          <Route path="evals" element={<Evals />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

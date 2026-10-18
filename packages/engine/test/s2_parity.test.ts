@@ -70,6 +70,20 @@ describe('S2 parity with the sim', () => {
     expect(live.surprise('erp.get_vendor', 'erp.export_report')).toBeLessThan(before);
   });
 
+  it('τ and volume stats stay in step with the sim as both keep learning (no stale cache)', () => {
+    const { mine: m, theirs: t, mv: v, tv: w } = trainBoth(42, 40);
+    const a = rng(77), b = sim.rng(77);
+    for (let i = 0; i < 30; i++) {
+      expect(m.tau()).toBe(t.tau());
+      expect(v.vol('erp.get_price_list', 4)).toBe(w.vol('erp.get_price_list', 4));
+      const s = procSession(a), u = sim.procSession(b);
+      v.observeSession(s); w.observeSession(u);
+      for (let j = 1; j < s.length; j++) { m.observe(s[j - 1]!, s[j]!); t.observe(u[j - 1], u[j]); }
+      expect(m.clone().tau()).toBe(t.tau());
+      expect(v.clone().stats('mail.send')).toEqual(w.stats('mail.send'));
+    }
+  });
+
   it('reports confidence n/(n+20)', () => {
     expect(mine.confidence()).toBeCloseTo(308 / 328, 12);
     expect(new Baseline(PROC, CATALOG).confidence()).toBe(0);

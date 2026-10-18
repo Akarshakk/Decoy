@@ -1,0 +1,6 @@
+{
+  "name": "@swaroop/eval",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts"
+}
