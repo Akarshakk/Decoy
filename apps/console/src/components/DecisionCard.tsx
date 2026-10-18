@@ -152,6 +152,9 @@ export function DecisionCard({ decision: d, engine, readOnly = false }: { decisi
             {newRuntime && <p className="small muted">Approving also registers <span className="mono">{d.call.runtime.id}</span> ({d.call.runtime.asn}) as a known runtime for {d.call.agentId}.</p>}
           </>
         )}
+        {status === 'shadow' && d.band === 'HOLD' && offCharter && !follow.some(r => r.type === 'role_change') && (
+          <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.approveAsRoleChange(d.id)}>Approve as role change (charter v{charter.version + 1})</button>
+        )}
         {unvetted && <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.approveToolVersion(d.call.tool)}>Trust the new {d.call.tool} definition</button>}
         {agentState !== 'revoked' && status !== 'shadow' && (
           <button className="btn btn-line btn-block" disabled={!!busy} onClick={() => store.confirmCompromise(d.id)}>Confirm compromise and revoke</button>

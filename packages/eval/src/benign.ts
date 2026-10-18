@@ -91,10 +91,13 @@ export const COHORTS: Cohort[] = [
   steady('mailer', 'Mailer, everyday', 'mailer-01', mailerSession),
   {
     id: 'quarter-end', label: 'Quarter-end, one batch day', shifted: true,
-    summary: 'procurement-01 runs one 40–55 call session of vendor batches, far longer than its usual 7–10.',
+    summary: 'procurement-01 runs one 40–55 call session of vendor batches, far longer than its usual 7–10, then 4 ordinary days. All 5 days are measured.',
     async run(seeds, { detectors }) {
       const t = empty();
-      for (const seed of seeds) { const run = await Run.create({ detectors }), r = rng(seed); await play(run, 'procurement-01', quarterEnd(r), r, t); }
+      for (const g of groups(seeds, 5)) {
+        const run = await Run.create({ detectors });
+        for (const [i, seed] of g.entries()) { const r = rng(seed); await play(run, 'procurement-01', i === 0 ? quarterEnd(r) : procSession(r), r, t); }
+      }
       return t;
     },
   },

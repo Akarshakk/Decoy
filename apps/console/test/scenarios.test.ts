@@ -73,6 +73,16 @@ describe('scenario views', () => {
     expect(v.egress).toEqual([]);
   });
 
+  it('every scenario the Investigate page lists plays in both modes', async () => {
+    for (const { id } of SCENARIO_LIST) {
+      for (const mode of ['enforce', 'shadow'] as const) {
+        const v = await runScenario(id, mode);
+        expect(v.steps.length).toBeGreaterThan(0);
+        expect(v.mode).toBe(mode);
+      }
+    }
+  }, 30_000);
+
   it('caches runs: the same scenario and mode is played once', async () => {
     expect(await runScenario('d8')).toBe(await runScenario('d8'));
   });

@@ -538,9 +538,12 @@ export class Engine {
 
   /** HOLD on an off-charter tool → charter v+1 (signed) → token re-issued → snapshot re-frozen → drift reset → ledger. */
   async approveAsRoleChange(id: string, ts: number) {
-    const h = this.pending(id);
-    const r = this.rec(h.decision.call.agentId);
-    const tool = h.decision.call.tool;
+    // In shadow mode nothing is held, but the owner can still approve a would-be HOLD as a role change; that call already ran.
+    const shadow = this.decisions.find(x => x.id === id && !x.enforced && x.band === 'HOLD');
+    const h = shadow && !this.holds.has(id) ? null : this.pending(id);
+    const d = h?.decision ?? shadow!;
+    const r = this.rec(d.call.agentId);
+    const tool = d.call.tool;
     if (r.charter.tools.includes(tool)) throw new Error(`${tool} is already in the ${r.charter.role} charter`);
     const dc = this.catalog.get(tool)!.dataClass;
     const before = r.charter;
@@ -555,12 +558,12 @@ export class Engine {
     r.drift.reset();
     r.rebaselineUntil = ts + REBASELINE_MS;
     r.adopting.set(tool, { uses: 0, until: ts + ADOPTION_MS });
-    h.status = 'role_change';
-    this.sessions.get(h.decision.call.sessionId)!.roleChangeApproved = true;
+    if (h) h.status = 'role_change';
+    this.sessions.get(d.call.sessionId)!.roleChangeApproved = true;
     this.events.push({ kind: 'CharterUpdated', role: r.charter.role, version: r.charter.version });
     await this.ledger.append('role_change', { agent: r.agent.id, role: r.charter.role, from: before.version, to: r.charter.version,
       added: [tool], decision: id }, ts);
-    await this.execute(h.decision.call, this.catalog.get(tool)!, h.step, this.sessions.get(h.decision.call.sessionId)!);
+    if (h) await this.execute(h.decision.call, this.catalog.get(tool)!, h.step, this.sessions.get(h.decision.call.sessionId)!);
     return r.charter;
   }
 

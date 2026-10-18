@@ -195,7 +195,7 @@ export async function D14Hold(on: On = {}) {
 
 export async function D14(on: On = {}) {
   const { run, session: s, first } = await D14Hold(on);
-  await run.engine.approveHold(first.id, run.t);
+  if (first.held) await run.engine.approveHold(first.id, run.t);   // in shadow mode nothing was held: the call already ran
   const ingest = run.engine.events.find(e => e.kind === 'ContentIngested' && e.callId === first.call.callId);
   const ingestedTrusted = ingest?.kind === 'ContentIngested' ? ingest.trusted : undefined;
   const read = await s.call('hr.read_salary', { employee: 'all' });

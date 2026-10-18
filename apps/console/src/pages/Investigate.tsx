@@ -8,6 +8,7 @@ import { Spine } from '../components/Spine';
 import { BandChip, Frame, ScoreRing } from '../components/ui';
 import { useLive } from '../live/react';
 import { runScenario, SCENARIO_LIST, type ScenarioView } from '../live/scenarios';
+import { statusOf } from '../live/view';
 
 const STEP_MS = 1300;
 
@@ -89,7 +90,8 @@ export function Investigate() {
 
   const step = view.steps[Math.min(selected, total - 1)]!;
   const twin = view.twin;
-  const blocked = view.steps.filter(s => !s.decision.executed).length;
+  // Held calls the owner later approved did run; count only calls that never ran.
+  const blocked = view.steps.filter(s => !s.decision.executed && !['approved', 'role_change'].includes(statusOf(view.engine, s.decision))).length;
 
   return (
     <div className="main-col">

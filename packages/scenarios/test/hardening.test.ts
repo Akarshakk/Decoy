@@ -82,6 +82,16 @@ describe('a role change becomes the new normal', () => {
   });
 });
 
+describe('shadow mode owner actions', () => {
+  it('D5 in shadow: the owner approves the would-be hold as a role change; the call already ran, the charter moves to v2', async () => {
+    const r = await D5({ mode: 'shadow' });
+    expect([r.before.band, r.before.executed, r.before.enforced]).toEqual(['HOLD', true, false]);
+    expect(r.charterAfter.version).toBe(2);
+    expect(r.after.score).toBe(15);
+    expect(r.ledgerTypes).toContain('role_change');
+  });
+});
+
 describe('a role change adopted late is still the new normal', () => {
   it('onboarding every day from day 10 after the approval raises no alarm over 30 days', async () => {
     const run = await Run.create();
@@ -185,6 +195,12 @@ describe('D14 poisoned tool', () => {
     expect(r.read.culpritDoc).toMatch(/^erp\.get_vendor:/);
     expect(r.post.executed).toBe(false);
     expect(r.posted).toBe(0);
+  });
+
+  it('in shadow mode nothing is held: every call runs, and the would-be bands are still recorded', async () => {
+    const r = await D14({ mode: 'shadow' });
+    expect([r.first.band, r.first.executed, r.first.enforced]).toEqual(['HOLD', true, false]);
+    expect(r.posted).toBe(1);
   });
 
   it('after the owner reviews and trusts the new version, the tool runs normally again', async () => {
