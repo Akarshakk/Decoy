@@ -221,7 +221,7 @@ Action: token v2 → v3 = in-charter reads. Owner finance-platform notified. No 
 - Responses only narrow: a re-issued token is a subset of the old one, there is no re-issue when nothing would be removed, and an agent's state only moves towards revoked (a DOWN_SCOPE or a drift alarm never softens a quarantine to scoped_down or watch).
 - A call whose credentials failed is never parked as a HOLD, so approving a hold can't run a call the token didn't allow.
 - The simulated agent runtime renews its own token 5 minutes before the 15-minute expiry (same version, new jti). A runtime that was handed a token (D12's thief) can't renew it.
-- **Approve as role change** (HOLD on an off-charter tool): charter v+1 (signed) → token re-issued → the added tool's volume band restarts (no band until 5 sessions: the earlier zeros were the old charter, not behaviour) → snapshot re-frozen → S = 0 → for 7 days the snapshot is re-frozen after every absorbed session, before drift is measured → ledger `role_change` with the diff.
+- **Approve as role change** (HOLD on an off-charter tool): charter v+1 (signed) → token re-issued → the added tool's volume band restarts (no band until the tool is used in 5 sessions: earlier zeros say nothing about its use) → snapshot re-frozen → S = 0 → a re-baseline window: for 7 days, extended by 7 days at each session that uses the new tool until it has 5 uses (tracking lapses after 30 days), the snapshot is re-frozen after every absorbed session before drift is measured → ledger `role_change` with the diff.
 - **Drift input is capped for ordinary work:** x = min(H, sequence excess + ordinary-tool volume excess) + sensitive-tool volume excess (sens ≥2 or high-impact). One unusual day of in-role work (quarter-end) can't alarm alone; a burst of exports still does.
 - **Batch window** (owner action): until the window ends, ordinary volume neither counts as drift nor is learned; sequence and sensitive volume still count. Ledger `batch_window`.
 - **Tool pinning** (gateway): every tool definition is pinned by hash at registration. A changed definition (`tool_changed`) is unreviewed until the owner trusts it (`tool_approved`): S4 gets nor(.5, injection classifier on the new description), calls are held, and its output is untrusted content (S3/S4 taint it like an outside document).
@@ -287,7 +287,7 @@ The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus on
 ---
 
 ## 8. Eval harness (`npm run eval`)
-- **Seeds:** dev 1000–1099 (tuning allowed); test 4000–4199 (report only). Earlier reports used 2000–2199 and then 3000–3199 as their test splits; what they found shaped the fixes below, so those seeds are now `seen` and no longer held out.
+- **Seeds:** dev 1000–1099 and exploration seeds ≥ 10000 (tuning allowed); test 5000–5199 (report only). Earlier reports used 2000–2199, 3000–3199 and 4000–4199 as their test splits; what each found shaped the fixes below, so those seeds are now `seen` and no longer held out.
 - **Benign:** 200 sessions/role + shifted (quarter-end, post-role-change, new agents).
 - **Attacks:** injection→exfil, injection→payment, stolen-token context, escalating drift (3 slopes), constant-rate mimicry, delegation widening, honeytoken, in-distribution mimicry (expected miss).
 - **Configs:** credentials-only · S1-only · S2-only · A-only (S1+S3+S5) · full.
@@ -302,6 +302,7 @@ The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus on
   - Stolen token in daytime with the real agent idle: 19 of 200 got through → new-runtime step-up on sensitive calls.
   - Payment redirect: inline checks caught 0% (no destination for S3) → `sinkArg: 'iban'` on payments, and the off-charter high-impact step-up.
   - The PS names a poisoned tool, which no scenario covered → tool pinning, D14 and the `poisoned-tool` family.
+  - Third report (4000–4199): 3 drift alarms in 200 post-role-change sessions. On exploration seeds: when the agent first used the approved tool after the 7-day window, the restarted band was "known" from zeros and the frozen snapshot never refreshed (S stayed > 0) → a restarted tool's band stays unknown until the tool is used in 5 sessions, and each session that uses it extends the re-baseline window by 7 days until then (lapses after 30 days without use). Exploration: daily onboarding from day 10, 77 → 1 alarm in 1,800 days. The residual (~1 in 1,800 days, no call held) is an unseen transition of the new tool, and is reported, not tuned.
   - Second report (3000–3199): a new agent raised 1 drift alarm in 200 sessions (900 dev new-agent days: 20). Its snapshot was frozen empty and its own volume bands switched on abruptly at 5 sessions → a new agent's first week is a re-baseline window, and its volume bands are the peer's blended towards its own with w = n/(n+20), the same prior S2 uses (900 dev days: 0 alarms).
   - Per-call latency grew with history (τ re-sorted every session) → sorted insert and cached volume stats.
 

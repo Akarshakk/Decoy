@@ -82,6 +82,21 @@ describe('a role change becomes the new normal', () => {
   });
 });
 
+describe('a role change adopted late is still the new normal', () => {
+  it('onboarding every day from day 10 after the approval raises no alarm over 30 days', async () => {
+    const run = await Run.create();
+    await D5(run);
+    for (let day = 0; day < 30; day++) {
+      run.nextDay();
+      const r = rng(20_000 + day), tools = procSession(r);
+      if (day >= 10) tools.splice(tools.indexOf('erp.create_purchase_request'), 0, 'erp.onboard_supplier');
+      const s = await run.session('procurement-01');
+      for (const t of tools.slice(1)) await s.call(t, argsFor(t, r));
+      expect((await s.end())!.alarm).toBe(false);
+    }
+  });
+});
+
 describe('a new agent settles in', () => {
   it('procurement-02 works 20 ordinary days from creation without a drift alarm (seeds 3000–3019)', async () => {
     const run = await Run.create();

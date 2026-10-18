@@ -62,7 +62,7 @@ export class Baseline {
 }
 
 // Volume bands: per-tool count per session. Fit = plain mean/std over training sessions.
-export const MIN_FRESH_SESSIONS = 5;   // a tool added by a role change has no volume band until it has this many sessions
+export const MIN_FRESH_SESSIONS = 5;   // a tool added by a role change has no volume band until used in this many sessions
 
 /**
  * Volume bands: per-tool count per session. Fit = plain mean/std over training sessions. With a peer prior (a new agent
@@ -96,8 +96,9 @@ export class VolumeBands {
   private fit(t: string) {
     const xs = this.sessions.slice(this.since.get(t) ?? 0).map(c => c.get(t) ?? 0), n = xs.length || 1;
     const mu = xs.reduce((a, b) => a + b, 0) / n, sd = Math.sqrt(xs.reduce((a, b) => a + (b - mu) ** 2, 0) / n);
-    // floor so never-seen tools don't explode; a restarted tool is unknown until it has MIN_FRESH_SESSIONS sessions
-    return { mu, sd: Math.max(sd, 0.25), known: !this.since.has(t) || xs.length >= MIN_FRESH_SESSIONS };
+    // floor so never-seen tools don't explode. A tool a role change added is unknown until the agent has used it in
+    // MIN_FRESH_SESSIONS sessions: zeros from before it started using the tool say nothing about how often it will.
+    return { mu, sd: Math.max(sd, 0.25), known: !this.since.has(t) || xs.filter(x => x > 0).length >= MIN_FRESH_SESSIONS };
   }
   // Per-session excess z above 2σ, split by whether the tool touches sensitive data or acts outside (input to the drift accumulator).
   excessSplit(s: string[], sensitive: (tool: string) => boolean) {

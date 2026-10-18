@@ -9,7 +9,7 @@ import { endSession as endCredentialSession, newCredentialState, recordPresentat
 import { actionSummary, explain, FACTOR_LABEL } from './fusion/explain';
 import { fuse, nor, WEIGHTS } from './fusion/fuse';
 import { DriftAccumulator, type DriftReference, type Snapshot } from './learned/drift';
-import { Baseline, VolumeBands } from './learned/s2_baseline';
+import { Baseline, MIN_FRESH_SESSIONS, VolumeBands } from './learned/s2_baseline';
 import { classifyInjection, s4Injection, type InjectionResult } from './learned/s4_injection';
 import { s6Delegation } from './learned/s6_delegation';
 import { respond } from './respond/orchestrator';
@@ -21,6 +21,7 @@ import type { AAE, Agent, AgentState, Charter, Decision, Factor, FactorResult, S
 const DAY_MS = 86_400_000;
 const SNAPSHOT_EVERY_MS = 7 * DAY_MS;
 const REBASELINE_MS = 7 * DAY_MS;    // after an approved role change, the snapshot follows the new normal for a week
+const ADOPTION_MS = 30 * DAY_MS;     // an approved tool not used within 30 days stops extending the window
 const HIGH_IMPACT = new Set(['send_external', 'payment', 'delete']);
 const MIN_VOLUME_SESSIONS = 5;   // below this, an agent's own volume bands are noise
 
@@ -69,6 +70,7 @@ interface AgentRecord {
   peer: string | null;
   rebaselineUntil: number | null;       // end of the post-role-change window, if one is open
   batchUntil: number | null;            // end of an owner-announced batch window (quarter-end and the like)
+  adopting: Map<string, { uses: number; until: number }>;   // tools a role change added, until the agent has used them
 }
 
 interface SessionState {
@@ -139,7 +141,7 @@ export class Engine {
       baseline, volume, snapshot: { baseline: baseline.clone(), volume: volume.clone(peerRec?.snapshot.volume ?? null), id: `bs_${s.id}_1`, frozenAt: nowMs },
       drift: new DriftAccumulator(), lastScore: 0, snapshots: 1, peer: s.peerOf ?? null, batchUntil: null,
       // A brand-new agent's first week is a re-baseline window, like a role change: its snapshot follows what it learns.
-      rebaselineUntil: s.history.length ? null : nowMs + REBASELINE_MS,
+      rebaselineUntil: s.history.length ? null : nowMs + REBASELINE_MS, adopting: new Map(),
     };
     this.agents.set(s.id, rec);
     await this.mint(rec, nowMs);
@@ -456,7 +458,15 @@ export class Engine {
       for (let j = 1; j < tools.length; j++) r.baseline.observe(tools[j - 1]!, tools[j]!);
       absorbed = true;
     };
-    // For a week after an approved role change the snapshot follows the new normal: learn first, re-freeze, then measure.
+    // The window follows adoption of an approved tool, not the calendar: each session that uses it extends the window by
+    // a week until it has been used in MIN_FRESH_SESSIONS sessions (or 30 days pass without that).
+    for (const [tool, a] of r.adopting) {
+      if (ts > a.until) { r.adopting.delete(tool); continue; }
+      if (!tools.includes(tool)) continue;
+      r.rebaselineUntil = Math.max(r.rebaselineUntil ?? 0, ts + REBASELINE_MS);
+      if (++a.uses >= MIN_FRESH_SESSIONS) r.adopting.delete(tool);
+    }
+    // In the window the snapshot follows the new normal: learn first, re-freeze, then measure.
     const rebaselining = r.rebaselineUntil !== null && ts <= r.rebaselineUntil;
     if (rebaselining && canLearn()) { learn(); this.refreeze(r, ts); }
     // The session whose call the owner just approved as a role change is the new normal, not drift.
@@ -544,6 +554,7 @@ export class Engine {
     this.refreeze(r, ts);
     r.drift.reset();
     r.rebaselineUntil = ts + REBASELINE_MS;
+    r.adopting.set(tool, { uses: 0, until: ts + ADOPTION_MS });
     h.status = 'role_change';
     this.sessions.get(h.decision.call.sessionId)!.roleChangeApproved = true;
     this.events.push({ kind: 'CharterUpdated', role: r.charter.role, version: r.charter.version });
