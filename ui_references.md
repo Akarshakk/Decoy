@@ -22,7 +22,7 @@ Its limits:
 - **Delegation branches** leave the spine sideways into a child-agent lane (D7). The restriction badge lands on the branch, not on the child agent.
 - **Scrubber + live engine.** A timeline scrubber at the bottom (step / autoplay / reset) drives the *real* engine. A **shadow toggle** reveals the counterfactual: "without Swaroop: 1 POST to acme-verify.co, 48 salary rows out".
 - **Right panel = alert card** (section 2, Sentry + Stripe patterns).
-- Built on `@xyflow/react` with a fixed, deterministic top-down layout and editing turned off. Pan/zoom only.
+- Built (2026-10-18) as plain DOM + SVG (`apps/console/src/components/Spine.tsx`): a fixed top-down spine needs no graph library. Keep `@xyflow/react` for the P1 delegation graph only.
 
 ## 2. Product-UI references (console)
 
@@ -54,11 +54,11 @@ Visited and **rejected** as references: Tines (illustration-heavy, not minimal),
   - Under it: role, charter v, token v + scopes (over-provisioned scopes struck through in grey), baseline confidence n/(n+k).
 - **Score ring:** 0–100 ring with five band ticks (30/55/75/90). The number sits inside in Geist Mono.
 - **Colour:**
-  - Paper `#FAFAF9`, ink `#0A0A0A`, hairlines `#E7E5E4`.
+  - Langfuse light tokens (taken from langfuse.com CSS): page `#edede8`, panel `#f6f6f3`, ink `#222220`, hairline `#cfcfc9`, marker yellow `#fbff81`. Structure = 1px black rules with "+" corner ticks over a faint grid.
   - Bands carry all the colour: ALLOW stone-grey `#78716C` (normal shouldn't shout) · HOLD amber `#D97706` · DOWN-SCOPE orange `#EA580C` · QUARANTINE red `#DC2626` · REVOKE ink with a red outline.
   - Accent for links/focus only: deep teal `#0F766E`. Avoid Remit's indigo.
   - Dark mode = the same tokens inverted (define all as CSS variables on `:root`).
-- **Type:** Geist for UI and Geist Mono for numbers, hashes and tool names (both verified on Google Fonts; npm `geist` 1.8.1). One serif for the landing headline only (e.g. Instrument Serif, Google Fonts).
+- **Type:** Schibsted Grotesk for UI and headlines (landing h1 112px / 600 / −0.055em), Geist Mono for numbers, hashes and tool names, Tiro Devanagari for स्वरूप. All Google Fonts.
 - **Motion:** only for state changes: a score ring fills, a band chip flips, a token version ticks v1 → v2. No ambient animation.
 - **Density:** 14 px base, 8 px grid, 1 px hairlines, no drop shadows except on the floating scrubber.
 - **Rules:** no fake numbers anywhere (everything comes from the engine or eval JSON) · every coloured element maps to a band · every alert names its root cause in plain words before any chart.

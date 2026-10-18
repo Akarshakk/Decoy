@@ -1,83 +1,122 @@
-// Hero illustration: the D2 story as line art. A poisoned PDF reaches procurement-01; every call passes
-// through Swaroop's response ladder; the in-role read is allowed, the salary read is down-scoped, the upload is stopped.
+import type { ReactNode } from 'react';
+
+// Hero illustration: "stays in its lane". The lane is procurement-01's role; its usual stops sit on it.
+// After the poisoned supplier PDF the path leaves the lane, and Swaroop scores each off-lane step (D2: 69, then 72).
+// The in-role price lookup at the end of the lane still runs.
+
+const LANE_Y = 372;
+const TILE = 68;
+
+function Tile({ x, label, children, tint }: { x: number; label: string; children: ReactNode; tint?: boolean }) {
+  return (
+    <g>
+      <rect x={x - TILE / 2} y={LANE_Y - TILE / 2} width={TILE} height={TILE} rx={16} className={`ink ${tint ? 'fill-paper' : 'fill-white'}`} />
+      {children}
+      <text x={x} y={LANE_Y + 64} textAnchor="middle" className="art-label">{label}</text>
+    </g>
+  );
+}
+
+function Badge({ x, y, score, band, label, side }: { x: number; y: number; score: number; band: 'down' | 'quar'; label: string; side: 'left' | 'right' }) {
+  return (
+    <g>
+      <circle cx={x} cy={y} r={21} className={`ink fill-${band}`} />
+      <text x={x} y={y} textAnchor="middle" dominantBaseline="central" className="art-mono art-num">{score}</text>
+      <text x={side === 'left' ? x - 30 : x + 30} y={y} dominantBaseline="central" textAnchor={side === 'left' ? 'end' : 'start'} className="art-mono art-tiny">{label}</text>
+    </g>
+  );
+}
+
+const OFF_1 = 'M 296 338 C 296 272, 290 222, 322 222';
+const OFF_2 = 'M 492 222 C 524 222, 520 160, 520 116';
+
 export function HeroArt() {
   return (
-    <svg className="art" viewBox="0 0 640 540" role="img"
-      aria-label="A poisoned supplier PDF reaches the procurement agent. Swaroop allows erp.get_vendor, down-scopes hr.read_salary and quarantines http.post to acme-verify.co.">
-      {/* document */}
-      <g className="art-in" style={{ animationDelay: '0ms' }}>
-        <path className="ink fill-paper" d="M48 30h120l40 40v150H48z" />
-        <path className="ink" d="M168 30v40h40" />
-        <path className="ink" d="M72 82h86 M72 106h106 M72 130h70" />
-        <rect className="ink fill-mark" x="68" y="156" width="118" height="26" rx="13" />
-        <path className="ink dash" d="M82 169h90" />
-        <text className="art-label" x="48" y="244">inv-204511.pdf</text>
-      </g>
+    <figure className="ring-art">
+      <svg className="art" viewBox="0 20 630 432" role="img"
+        aria-label="procurement-01 travels its role lane: vendors, invoices, a supplier PDF. After the PDF its path leaves the lane to salaries, scored 69 and down-scoped, then to acme-verify.co, scored 72 and quarantined. The price lookup back on the lane still runs.">
 
-      {/* agent window */}
-      <path className="ink dash wire" d="M128 254v38" />
-      <g className="art-in" style={{ animationDelay: '120ms' }}>
-        <rect className="ink fill-white" x="20" y="292" width="228" height="176" rx="14" />
-        <path className="ink" d="M20 326h228" />
-        <circle className="ink" cx="42" cy="309" r="5" /><circle className="ink" cx="60" cy="309" r="5" /><circle className="ink" cx="78" cy="309" r="5" />
-        <text className="art-mono" x="44" y="362">procurement-01</text>
-        <path className="ink" d="M44 386h150 M44 410h176 M44 434h110" />
-      </g>
+        {/* the lane = the role */}
+        <rect x="8" y={LANE_Y - 42} width="596" height="84" rx="42" className="ink fill-lane" />
+        <path d={`M 30 ${LANE_Y} H 506`} className="trace trace-draw" pathLength={1} />
+        <path className="check" d={`M 410 ${LANE_Y - 2} l8 8 15 -17`} />
 
-      {/* agent → gateway */}
-      <path className="ink wire" d="M248 380 C 282 380, 282 300, 318 300" />
+        {/* the token rides in */}
+        <g className="art-in">
+          <rect x="24" y="40" width="172" height="80" rx="14" className="ink fill-white" />
+          <rect x="38" y="56" width="34" height="48" rx="6" className="ink fill-paper" />
+          <circle cx="55" cy="72" r="7" className="ink" />
+          <path className="ink" d="M44 96c2-9 20-9 22 0" />
+          <text x="86" y="74" className="art-label art-strong">token</text>
+          <text x="86" y="96" className="art-mono art-tiny">signature ok</text>
+          <circle cx="192" cy="44" r="14" className="ink fill-white" />
+          <path className="check" d="M185.5 44l4.5 4.5 8.5-9.5" />
+        </g>
+        <path className="ink dash" d={`M 72 120 V ${LANE_Y - TILE / 2}`} />
 
-      {/* gateway: the five-band response ladder */}
-      <g className="art-in" style={{ animationDelay: '220ms' }}>
-        <rect className="ink fill-white" x="318" y="96" width="88" height="388" rx="44" />
-        <text className="art-label" x="362" y="80" textAnchor="middle">Swaroop</text>
-        {[
-          { y: 140, c: 'slot-allow' },
-          { y: 196, c: 'slot-hold' },
-          { y: 252, c: 'slot-down is-lit' },
-          { y: 308, c: 'slot-quar' },
-          { y: 364, c: 'slot-revoke' },
-        ].map(s => <rect key={s.y} className={`ink slot ${s.c}`} x="336" y={s.y} width="52" height="30" rx="15" />)}
-        <text className="art-mono art-score" x="362" y="440" textAnchor="middle">69</text>
-      </g>
+        {/* usual stops on the lane */}
+        <g className="art-in" style={{ animationDelay: '80ms' }}>
+          <Tile x={72} label="vendors">
+            <ellipse cx="72" cy="358" rx="16" ry="6" className="ink fill-paper" />
+            <path className="ink fill-paper" d="M56 358v25c0 3.3 7.2 6 16 6s16-2.7 16-6v-25" />
+            <path className="ink" d="M56 370.5c0 3.3 7.2 6 16 6s16-2.7 16-6" />
+          </Tile>
+        </g>
+        <g className="art-in" style={{ animationDelay: '160ms' }}>
+          <Tile x={184} label="invoices">
+            <rect x="176" y="349" width="24" height="31" rx="3" className="ink fill-paper" />
+            <rect x="168" y="357" width="24" height="31" rx="3" className="ink fill-white" />
+            <path className="ink" d="M174 367h12 M174 373h12 M174 379h8" />
+          </Tile>
+        </g>
+        <g className="art-in" style={{ animationDelay: '240ms' }}>
+          <Tile x={296} label="supplier PDF" tint>
+            <path className="ink fill-white" d="M282 351h19l10 10v29h-29z" />
+            <path className="ink" d="M301 351v10h10 M288 363h11 M288 369h16" />
+            <rect x="286" y="376" width="21" height="8" rx="4" className="ink fill-mark" />
+          </Tile>
+        </g>
+        <g className="art-in" style={{ animationDelay: '320ms' }}>
+          <Tile x={540} label="price list">
+            <path className="ink fill-paper" d="M522 372l11-12h24v24h-24z" />
+            <circle cx="534" cy="372" r="3.2" className="ink fill-white" />
+            <path className="ink" d="M541 368h10 M541 376h7" />
+          </Tile>
+        </g>
 
-      {/* gateway → tools */}
-      <path className="ink wire" d="M406 158 C 446 158, 446 92, 486 92" />
-      <path className="ink dash wire" d="M406 268 C 446 268, 446 262, 486 262" />
-      <path className="ink dash wire" d="M406 330 C 446 330, 446 432, 486 432" />
+        {/* leaving the lane, tainted by the PDF */}
+        <path d={OFF_1} className="trace-marker trace-late" />
+        <path d={OFF_1} className="trace trace-taint trace-late" />
+        <path d={OFF_2} className="trace-marker trace-late" />
+        <path d={OFF_2} className="trace trace-taint trace-late" />
 
-      {/* verdict marks on the wires */}
-      <path className="check" d="M432 108l8 8 16-18" />
-      <g className="art-pop" style={{ animationDelay: '900ms' }}>
-        <circle className="ink fill-down" cx="446" cy="266" r="13" /><path className="ink thick" d="M439 266h14" />
-      </g>
-      <g className="art-pop" style={{ animationDelay: '1100ms' }}>
-        <circle className="ink fill-quar" cx="446" cy="384" r="13" /><path className="ink thick" d="M439 384h14" />
-      </g>
+        <g className="art-in" style={{ animationDelay: '900ms' }}>
+          <rect x="322" y="184" width="170" height="76" rx="14" className="ink fill-white" />
+          <rect x="338" y="198" width="34" height="48" rx="6" className="ink fill-paper" />
+          <circle cx="355" cy="214" r="7" className="ink" />
+          <path className="ink" d="M344 238c2-9 20-9 22 0" />
+          <text x="386" y="216" className="art-label art-strong">salaries</text>
+          <text x="386" y="238" className="art-mono art-tiny">hr.read_salary</text>
+        </g>
+        <g className="art-in" style={{ animationDelay: '1150ms' }}>
+          <rect x="432" y="36" width="172" height="80" rx="14" className="ink fill-white" />
+          <circle cx="466" cy="76" r="18" className="ink fill-paper" />
+          <path className="ink" d="M448 76h36 M466 58c-7.5 9.5-7.5 26.5 0 36 M466 58c7.5 9.5 7.5 26.5 0 36" />
+          <text x="494" y="70" className="art-label art-strong">acme-verify.co</text>
+          <text x="494" y="92" className="art-mono art-tiny">http.post</text>
+        </g>
 
-      {/* tool cards */}
-      <g className="art-in" style={{ animationDelay: '320ms' }}>
-        <rect className="ink fill-white" x="486" y="44" width="138" height="96" rx="14" />
-        <ellipse className="ink fill-paper" cx="522" cy="76" rx="18" ry="7" />
-        <path className="ink fill-paper" d="M504 76v26c0 4 8 7 18 7s18-3 18-7V76" />
-        <path className="ink" d="M504 89c0 4 8 7 18 7s18-3 18-7" />
-        <path className="ink" d="M556 78h50 M556 96h34" />
-        <text className="art-mono art-small" x="502" y="130">erp.get_vendor</text>
-      </g>
-      <g className="art-in" style={{ animationDelay: '400ms' }}>
-        <rect className="ink fill-white" x="486" y="214" width="138" height="96" rx="14" />
-        <rect className="ink fill-paper" x="504" y="232" width="40" height="44" rx="6" />
-        <circle className="ink" cx="524" cy="248" r="7" /><path className="ink" d="M512 270c2-8 22-8 24 0" />
-        <path className="ink" d="M556 246h50 M556 264h34" />
-        <text className="art-mono art-small" x="502" y="300">hr.read_salary</text>
-      </g>
-      <g className="art-in" style={{ animationDelay: '480ms' }}>
-        <rect className="ink fill-white" x="486" y="384" width="138" height="96" rx="14" />
-        <circle className="ink fill-paper" cx="524" cy="424" r="20" />
-        <path className="ink" d="M504 424h40 M524 404c-8 10-8 30 0 40 M524 404c8 10 8 30 0 40" />
-        <path className="ink" d="M556 416h50 M556 434h34" />
-        <text className="art-mono art-small" x="502" y="470">http.post</text>
-      </g>
-    </svg>
+        <g className="art-pop" style={{ animationDelay: '1300ms' }}>
+          <Badge x={297} y={262} score={69} band="down" label="down-scope" side="left" />
+        </g>
+        <g className="art-pop" style={{ animationDelay: '1500ms' }}>
+          <Badge x={518} y={186} score={72} band="quar" label="quarantine" side="right" />
+        </g>
+      </svg>
+      <figcaption className="ring-cap">
+        <span className="mono">procurement-01</span> stays in its lane until the <mark className="mark">supplier PDF</mark>.
+        Every step off the lane gets a score. The price lookup still runs.
+      </figcaption>
+    </figure>
   );
 }

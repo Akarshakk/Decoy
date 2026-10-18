@@ -256,7 +256,7 @@ State: one Engine per tab via React context + `useSyncExternalStore`. Header: sa
 
 | Route | Content | Pri |
 |---|---|---|
-| `/` | Landing, **max 2 screens at 1440×900**. Screen 1: headline, live mini session spine (runs D2 headless on load) + alert card, CTA. Screen 2: three phases, response ladder, role contrast 69 vs 0, one-line limits, footer. No long-scroll chapters. | P0 |
+| `/` | Landing (built): hero with "stays in its lane" D2 illustration and five chapter tabs · Why (role contrast 69 vs 0) · Slow drift (D6 accumulator chart) · Response ladder · Evidence (ledger hashed in the browser) · gradient CTA · dark footer. ~4.4 screens at 1440×900. | P0 |
 | `/app` Fleet | agent table (role, state, live score, sparkline) · HOLD queue · alerts by factor | P0 |
 | `/app/investigate/:scenario` | **Signature page.** Left: scenario list. Centre: session graph (React Flow): call nodes with score ring + band chip; the taint edge from the culprit doc highlighted; delegation edges to child agents. Bottom: timeline scrubber (step / autoplay). Right: alert card. | P0 |
 | `/app/alerts/:id` | full alert card (§5.5) + factor bars + token diff + evidence + actions (confirm compromise / mark FP / approve change) | P0 |

@@ -14,11 +14,11 @@ const D3 = scenarioById('d3')!;
 
 // Each chapter owns a tint: its folder tab in the hero and its segment in the header strip.
 const CHAPTERS = [
-  { id: 'why', label: 'Why Swaroop', tint: 'var(--t-paper)' },
-  { id: 'drift', label: 'Slow drift', tint: 'var(--t-yellow)' },
-  { id: 'response', label: 'Response', tint: 'var(--t-peach)' },
-  { id: 'evidence', label: 'Evidence', tint: 'var(--t-sage)' },
-  { id: 'try', label: 'Try it', tint: 'var(--t-mist)' },
+  { id: 'why', label: 'Why Swaroop', hint: '69 vs 0, same call', tint: 'var(--t-paper)' },
+  { id: 'drift', label: 'Slow drift', hint: 'alarm at session 7', tint: 'var(--t-yellow)' },
+  { id: 'response', label: 'Response', hint: 'five bands, 0 to 100', tint: 'var(--t-peach)' },
+  { id: 'evidence', label: 'Evidence', hint: 'hash-chained ledger', tint: 'var(--t-sage)' },
+  { id: 'try', label: 'Try it', hint: 'replay D2 live', tint: 'var(--t-mist)' },
 ];
 
 function useActiveChapter() {
@@ -108,7 +108,8 @@ export function Landing() {
               <svg viewBox="0 0 232 64" preserveAspectRatio="none" aria-hidden>
                 <path d="M0.5 64 V12 Q0.5 0.5 12 0.5 H200 L231.5 64" style={{ fill: c.tint }} vectorEffect="non-scaling-stroke" />
               </svg>
-              <span>{c.label}</span>
+              <span className="lp-tab-label"><span className="lp-tab-n">0{i + 1}</span>{c.label}</span>
+              <span className="lp-tab-hint">{c.hint}</span>
             </a>
           ))}
         </nav>
