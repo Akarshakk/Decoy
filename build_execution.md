@@ -280,7 +280,7 @@ State: one Engine per tab via React context + `useSyncExternalStore`. Header: sa
 | | **Live (step 5):** catch matrix (families × detector sets, Wilson whiskers), stop position per attack call, sessions-to-detect histograms, benign cohorts, latency histogram, weaknesses derived from the run, and a button that replays seeds 2000–2004 in the browser and diffs them with the file. A test fails if the committed file no longer matches the engine. | |
 | charter editor | drawer on the agent page: add/remove tool → rerun → verdict changes | P1 |
 
-Every number on screen comes from the engine or the eval JSON. `vercel.json` rewrites all paths to `/index.html`.
+Every number on screen comes from the engine or the eval JSON. Root `vercel.json` installs the workspace (`npm ci`), builds the console (`npm run build`), serves `apps/console/dist` and rewrites every other path to `/index.html`.
 
 The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus one benign workday (`packages/scenarios/src/fleet.ts`). Actions run one at a time and the ledger is re-verified after each. The engine is deterministic, so the tab's action log in sessionStorage replays the same sandbox after a reload. Incidents reuse the §6 scripts on the shared fleet. On a fresh fleet they print the §6 numbers exactly, and after a workday they keep their bands (D4 reads 64 instead of 63 because procurement-02 has learned one session); both are tested.
 
