@@ -205,7 +205,7 @@ Extra rules:
 
 | Page | Content |
 |---|---|
-| `/` Landing | One-line problem ("valid token, wrong behaviour") · the PS example as a 4-step live story · how scoring works (three-phase diagram, our own visual) · role contrast · slow-drift chart · honest limits (D10, D13) · CTA "Run it live". Every number is computed live or read from eval JSON. |
+| `/` Landing | **Short: at most 2 screens of scroll on a 1440×900 laptop.** Screen 1 = headline "Valid token. Wrong behaviour." + a live mini session spine running D2 + its alert card + CTA "Run the live demo". Screen 2 = three phases (Identify → Detect → Respond) + response ladder + role contrast (69 vs 0) + one line of honest limits + footer. Everything else (slow drift, evals, ledger) lives in the console. Every number is computed live or read from eval JSON. |
 | Fleet (overview) | Fleet table: agent, role, state, live score, sparkline · HOLD queue · alerts by factor · shadow/enforce switch |
 | Investigate (scenario player) | The signature page: an action-timeline / graph of the session where each call node carries its score ring and factor chips. The taint path from the culprit document is drawn through the graph; a side panel shows the alert card. Step / autoplay / reset. |
 | Alert card (decision) | Score + band · factor bars with leave-one-out impact · root cause · culprit document · evidence IDs · credentials result · token diff · charter/snapshot versions · ledger hash · confirm compromise / mark FP / approve change |
