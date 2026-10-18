@@ -27,7 +27,7 @@ const S1 = ({ tool = 0, dataSens = 0, egress = 0 }) => nor([tool ? 0.5 : 0, 0.15
 const S3 = ({ injShape = 0, sensEgress = 0, untrustedArg = 0 }) => nor([injShape ? 0.5 : 0, sensEgress ? 1 : 0, untrustedArg ? 0.7 : 0]);
 // S4 injection provenance: classifier score of the culprit doc, only when the call is off-baseline after ingestion
 const S4 = (docScore, seqStrength) => (seqStrength > 0 ? docScore : 0);
-const POISONED_DOC = 0.9;   // heuristic classifier on inv-204511.pdf (hidden HTML comment + imperative + URL + tool words)
+const POISONED_DOC = 1 - 0.4 * 0.5 * 0.7 * 0.7;   // = 0.902, the heuristic classifier on inv-204511.pdf (build_execution.md §4.4)
 
 const show = (id, label, r) => console.log(`${id.padEnd(4)} ${label.padEnd(54)} ${String(r.score).padStart(3)} ${r.band.padEnd(10)} ` +
   Object.entries(r.parts).map(([k, v]) => `${k}=${v.toFixed(2)}`).join(' ') + (r.loo ? '  | loo ' + Object.entries(r.loo).map(([k, v]) => `${k}:${v}`).join(' ') : ''));

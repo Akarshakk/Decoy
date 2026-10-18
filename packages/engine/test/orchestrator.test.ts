@@ -24,7 +24,7 @@ describe('response orchestrator', () => {
     expect(r.band).toBe('DOWN_SCOPE');
     expect(r.runs).toBe(false);
     expect(r.token).toMatchObject({ kind: 'reissue', target: 'agent', verAfter: 2 });
-    expect(r.token.removed!.sort()).toEqual(['hr.list_employees', 'hr.read_salary', 'http.post', 'payments.pay_invoice']);
+    expect(r.token.removed!.sort()).toEqual(['erp.onboard_supplier', 'hr.list_employees', 'hr.read_salary', 'http.post', 'payments.pay_invoice']);
     expect(r.token.scopesAfter!.sort()).toEqual([...proc.tools].sort());
     expect(r.agentStateAfter).toBe('scoped_down');
   });

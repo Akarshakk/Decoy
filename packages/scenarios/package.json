@@ -1,0 +1,6 @@
+{
+  "name": "@swaroop/scenarios",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts"
+}

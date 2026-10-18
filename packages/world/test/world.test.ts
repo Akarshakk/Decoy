@@ -72,8 +72,8 @@ describe('agents', () => {
       const a = AGENT_PROFILES.find(p => p.id === id)!;
       return a.scopes.filter(s => !CHARTERS_V1[a.role as keyof typeof CHARTERS_V1].tools.includes(s)).sort();
     };
-    expect(extra('procurement-01')).toEqual(['hr.list_employees', 'hr.read_salary', 'http.post', 'payments.pay_invoice']);
-    expect(extra('procurement-02')).toEqual(['hr.list_employees', 'hr.read_salary', 'http.post', 'payments.pay_invoice']);
+    expect(extra('procurement-01')).toEqual(['erp.onboard_supplier', 'hr.list_employees', 'hr.read_salary', 'http.post', 'payments.pay_invoice']);
+    expect(extra('procurement-02')).toEqual(['erp.onboard_supplier', 'hr.list_employees', 'hr.read_salary', 'http.post', 'payments.pay_invoice']);
     expect(extra('hr-assist-01')).toEqual(['http.post']);
     expect(extra('mailer-01')).toEqual([]);
   });

@@ -61,7 +61,7 @@ Remit targets the **same PS**. Its scenarios include a Procurement assistant, a 
 |---|---|---|
 | "learns the normal behavior" | No learning (*"not made by an AI model"*). Its tool-bigram baseline is the thing it beats. | S2 baseline is a core detector. |
 | "clear risk score" | Categorical verdict + integer 0–3. | 0–100 Noisy-OR with per-factor breakdown. |
-| "without over-triggering" | 54.7% of benign traces flagged. | Simulated 0/1,531 benign calls ≥30. Shadow mode, approve-as-role-change. |
+| "without over-triggering" | 54.7% of benign traces flagged. | 0 of 1,513 held-out benign calls ≥30 through the full engine (max 25). Shadow mode, approve-as-role-change. |
 | "change it slowly" | Per-session drift level. | Cross-session accumulator against a frozen snapshot. |
 | Live demo | Recorded snapshot. | Live engine on the hosted URL. |
 
@@ -128,7 +128,7 @@ OWASP Top 10 for Agentic Applications 2026 (published 2025-12-09), for the pitch
 | S4 Injection provenance | 0.25 | culprit doc's classifier score, only if the call is off-baseline after ingestion (shift test) |
 | S5 Credential context | 0.50 | token replay 1.0 · new runtime/ASN .5 · unusual hour .3 · concurrent use .6 |
 | S6 Delegation graph | 0.60 | widening beyond the act-chain intersection 1.0 · new agent→agent edge .3 · fan-out >3 .4 · parent risk ×.8 |
-| DA Drift accumulator | 0.40 | min(1, S/H); CUSUM k=0.5, H=5; after an alarm, s=1 until the owner resets it |
+| DA Drift accumulator | 0.40 | latched: 0 until the CUSUM (k=0.5, H=5) alarms, then 1 until the owner resets it |
 
 Sensitivity multiplier m: 0 → .70 · 1 → .85 · 2 → .95 · 3 → 1.0 · any external egress → 1.0.
 Property by construction: S2 alone can reach at most 30 (0.30 × m). **Behaviour alone can at most trigger a HOLD; blocking needs corroboration or accumulated drift.** That's our answer to "learned models cause false positives".
@@ -228,7 +228,8 @@ Pre-checks already run. These are design sanity checks, **not results**: the gen
 
 | Check | Result |
 |---|---|
-| Benign held-out calls (1,531) | max score **5**, 0 calls ≥30 |
+| Benign held-out calls (1,531), S2 only (sim) | max score **5**, 0 calls ≥30 |
+| Benign held-out calls (1,513), **full engine** (`benignHeldOut(200)`) | max **25**, 0 calls ≥30, 0 drift alarms. The 19–25 calls are `erp.export_report` within 3 steps of reading an outside supplier document (S3 shape rule, .2 weighted), working as designed |
 | Quarter-end 45-call session | max **26** (the volume band fires; it's the closest call to HOLD) |
 | Accumulator, sequence only (k=0.5, H=5) | misses D6 and D9 (0 alarms) |
 | Accumulator, sequence + volume | **0 alarms in 900 benign sessions** (3 seeds); D6 at session 7; D9 at 2–8 |

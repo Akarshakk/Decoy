@@ -1,6 +1,6 @@
 // Phase III response orchestrator (build_execution.md §5.3): the smallest restriction that removes the risk.
 import { BANDS, bandOf } from '../fusion/fuse';
-import type { ActionClass, AgentState, Band, Charter, ToolDef } from '../types';
+import type { ActionClass, AgentState, Band, Charter, TokenAction, ToolDef } from '../types';
 
 const LADDER: Band[] = ['ALLOW', 'HOLD', 'DOWN_SCOPE', 'QUARANTINE', 'REVOKE'];
 const HIGH_IMPACT: ActionClass[] = ['send_external', 'payment', 'delete'];
@@ -22,14 +22,7 @@ export interface RespondInput {
   children: string[];                  // delegated child tokens (agent:session) to revoke on REVOKE
 }
 
-export interface TokenAction {
-  kind: 'none' | 'reissue' | 'revoke';
-  target?: 'agent' | 'delegated_session';
-  verAfter?: number;
-  scopesAfter?: string[];
-  removed?: string[];
-  cascade?: string[];
-}
+export type { TokenAction };
 
 export interface Response {
   band: Band;

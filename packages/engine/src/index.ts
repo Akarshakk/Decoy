@@ -10,3 +10,8 @@ export * from './checks/s3_flow';
 export * from './checks/s5_credential';
 export * from './respond/orchestrator';
 export * from './store/ledger';
+export * from './learned/s2_baseline';
+export * from './learned/s4_injection';
+export * from './learned/s6_delegation';
+export * from './learned/drift';
+export * from './engine';

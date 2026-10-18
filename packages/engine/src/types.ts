@@ -101,4 +101,21 @@ export interface Decision {
   latencyUs: number;
   ledgerHash: string;
   explanation: string;
+  // beyond §3: what the gateway actually did, for the console and the scenario assertions
+  executed: boolean;
+  held: boolean;
+  escalationReason?: string;
+  invariant?: string;
+  inlineLatencyUs: number;
+  tokenAction: TokenAction;
+  agentStateAfter: AgentState;
+}
+
+export interface TokenAction {
+  kind: 'none' | 'reissue' | 'revoke';
+  target?: 'agent' | 'delegated_session';
+  verAfter?: number;
+  scopesAfter?: string[];
+  removed?: string[];
+  cascade?: string[];
 }

@@ -13,7 +13,8 @@ export interface AgentProfile {
 }
 
 const proc = CHARTERS_V1.procurement.tools;
-const PROC_EXTRA = ['hr.read_salary', 'hr.list_employees', 'http.post', 'payments.pay_invoice'];
+// Over-provisioned like real agent tokens: broad ERP write scope plus HR, outbound HTTP and payments.
+const PROC_EXTRA = ['erp.onboard_supplier', 'hr.read_salary', 'hr.list_employees', 'http.post', 'payments.pay_invoice'];
 
 export const AGENT_PROFILES: AgentProfile[] = [
   { id: 'procurement-01', role: 'procurement', displayName: 'Procurement assistant', scopes: [...proc, ...PROC_EXTRA],
