@@ -64,17 +64,34 @@ export class Baseline {
 // Volume bands: per-tool count per session. Fit = plain mean/std over training sessions.
 export const MIN_FRESH_SESSIONS = 5;   // a tool added by a role change has no volume band until it has this many sessions
 
+/**
+ * Volume bands: per-tool count per session. Fit = plain mean/std over training sessions. With a peer prior (a new agent
+ * of the same role) the bands are the peer's, blended towards the agent's own as it works: w = n / (n + CONFIDENCE_K),
+ * mean and variance of the two-part mixture. Without a prior the fit is exactly the sim's.
+ */
 export class VolumeBands {
+  constructor(public prior: VolumeBands | null = null) {}
   sessions: Map<string, number>[] = [];
   private since = new Map<string, number>();   // tool → first session that counts (set when a role change adds the tool)
   private cache = new Map<string, { mu: number; sd: number; known: boolean }>();   // per tool; cleared when a session is learned
   observeSession(s: string[]) { const c = new Map<string, number>(); for (const t of s.slice(1)) c.set(t, (c.get(t) ?? 0) + 1); this.sessions.push(c); this.cache.clear(); }
   /** The tool just joined the role: sessions before now say nothing about how often the role uses it. */
   restart(t: string) { this.since.set(t, this.sessions.length); this.cache.delete(t); }
-  stats(t: string) {
+  stats(t: string): { mu: number; sd: number; known: boolean } {
     let hit = this.cache.get(t);
     if (!hit) { hit = this.fit(t); this.cache.set(t, hit); }
-    return hit;
+    if (!this.prior || this.since.has(t)) return hit;
+    const n = this.sessions.length, w = n / (n + CONFIDENCE_K);
+    const own = this.moments(t), p = this.prior.moments(t);
+    const mu = w * own.mu + (1 - w) * p.mu;
+    const v = w * own.v + (1 - w) * p.v + w * (1 - w) * (own.mu - p.mu) ** 2;
+    return { mu, sd: Math.max(Math.sqrt(v), 0.25), known: true };
+  }
+  /** Raw mean and variance of the counts (no floor), for blending. */
+  moments(t: string) {
+    const xs = this.sessions.slice(this.since.get(t) ?? 0).map(c => c.get(t) ?? 0), n = xs.length || 1;
+    const mu = xs.reduce((a, b) => a + b, 0) / n;
+    return { mu, v: xs.reduce((a, b) => a + (b - mu) ** 2, 0) / n };
   }
   private fit(t: string) {
     const xs = this.sessions.slice(this.since.get(t) ?? 0).map(c => c.get(t) ?? 0), n = xs.length || 1;
@@ -100,5 +117,5 @@ export class VolumeBands {
   }
   // S2 volume strength in [0,1] for the running count k of tool t in the current session.
   vol(t: string, k: number) { const { mu, sd, known } = this.stats(t); return known ? Math.max(0, Math.min(1, ((k - mu) / sd - 3) / 3)) : 0; }
-  clone(): VolumeBands { const v = new VolumeBands(); v.sessions = this.sessions.map(c => new Map(c)); v.since = new Map(this.since); return v; }
+  clone(prior = this.prior): VolumeBands { const v = new VolumeBands(prior); v.sessions = this.sessions.map(c => new Map(c)); v.since = new Map(this.since); return v; }
 }

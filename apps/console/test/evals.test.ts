@@ -10,7 +10,7 @@ const file = JSON.parse(readFileSync(resolve(__dirname, '../public/eval/results.
 
 describe('committed results.json', () => {
   it('is the full test split: every family and cohort under every config', () => {
-    expect(file.meta).toMatchObject({ split: 'test', seeds: [3000, 3199], trialsPerFamily: 200, synthetic: true });
+    expect(file.meta).toMatchObject({ split: 'test', seeds: [4000, 4199], trialsPerFamily: 200, synthetic: true });
     expect(file.attacks.map(a => a.id)).toEqual(FAMILIES.map(f => f.id));
     expect(file.benign.map(b => b.id)).toEqual(COHORTS.map(c => c.id));
     for (const a of file.attacks) expect(Object.keys(a.byConfig)).toEqual(CONFIGS.map(c => c.id));

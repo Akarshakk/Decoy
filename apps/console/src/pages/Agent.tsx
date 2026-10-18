@@ -99,7 +99,8 @@ export function Agent() {
               <Bar value={baseline.confidence} max={1} />
               <dl className="dc-facts">
                 <div><dt>Surprise p95</dt><dd className="mono">{baseline.tau.toFixed(2)} bits ({baseline.source === 'own' ? 'own' : baseline.source === 'peer' ? `from ${baseline.peer}` : 'default'})</dd></div>
-                <div><dt>Volume</dt><dd className="mono">{v.volume[0]?.source === 'own' ? 'own bands' : v.volume[0]?.source === 'peer' ? `peer bands (${baseline.peer})` : 'not scored yet'}</dd></div>
+                <div><dt>Volume</dt><dd className="mono">{v.volume[0]?.source === 'own' ? 'own bands' : v.volume[0]?.source === 'peer' ? `peer bands (${baseline.peer})`
+                  : v.volume[0]?.source === 'blend' ? `${pct(v.volumeWeight)} own, ${pct(1 - v.volumeWeight)} ${baseline.peer}` : 'not scored yet'}</dd></div>
                 <div><dt>Snapshot</dt><dd className="mono">{drift.snapshot.id}</dd></div>
                 <div><dt>Runtimes</dt><dd className="mono">{profile.knownRuntimes.join(', ')} · {profile.knownAsns.join(', ')}</dd></div>
                 <div><dt>Hours</dt><dd className="mono">{String(profile.activeHours[0]).padStart(2, '0')}–{String(profile.activeHours[1]).padStart(2, '0')}h UTC</dd></div>

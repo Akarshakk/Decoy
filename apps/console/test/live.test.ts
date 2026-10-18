@@ -126,11 +126,13 @@ describe('agent view', () => {
     expect(v.transitions.every(t => t.p > 0 && t.p <= 1)).toBe(true);
   });
 
-  it('a new agent borrows its peer: volume bands and p95 come from procurement-01', async () => {
-    const v = agentView(engineOf(await booted()), 'procurement-02');
+  it('a new agent borrows its peer: p95 from procurement-01, volume bands blended n/(n+20) towards its own', async () => {
+    const e = engineOf(await booted());
+    const v = agentView(e, 'procurement-02');
     expect(v.baseline.source).toBe('peer');
     expect(v.baseline.peer).toBe('procurement-01');
-    expect(v.volume.every(b => b.source === 'peer')).toBe(true);
+    expect(v.volume.every(b => b.source === 'blend')).toBe(true);
+    expect(v.volumeWeight).toBeCloseTo(1 / 21, 10);              // one workday: 1 own session
   });
 });
 

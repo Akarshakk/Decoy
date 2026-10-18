@@ -7,9 +7,9 @@ import { CONFIGS, type Config } from './configs';
 import { FAMILIES, type Family, type Variant } from './families';
 import { percentile, wilson } from './stats';
 
-// dev: free to look at while building. seen: the first report's test split (2000–2199); its results shaped the fixes in
-// build_execution.md §8, so it is no longer held out. test: never looked at before the final report.
-export const SPLITS = { dev: [1000, 1099], seen: [2000, 2199], test: [3000, 3199] } as const;
+// dev: free to look at while building. seen: earlier reports' test splits (2000–2199, then 3000–3199); what they found
+// shaped the fixes in build_execution.md §8, so they are no longer held out. test: never looked at before this report.
+export const SPLITS = { dev: [1000, 1099], seen: [2000, 3199], test: [4000, 4199] } as const;
 export const seedsOf = ([a, b]: readonly [number, number]) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 
 export interface Rate { k: number; n: number; rate: number; ci: [number, number] }

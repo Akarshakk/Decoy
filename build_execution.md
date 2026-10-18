@@ -217,7 +217,7 @@ Action: token v2 → v3 = in-charter reads. Owner finance-platform notified. No 
 - At session end, the baseline absorbs the session only if peak <30, no HOLD was denied, and the agent is not watch/quarantined/revoked.
 - The snapshot re-freezes every 7 simulated days **only while S = 0 and no alarm is latched** (otherwise slow drift would teach itself into the reference), and on a role change.
 - The session whose call the owner approved as a role change does not feed the accumulator.
-- Cold start for volume: an agent with fewer than 5 sessions uses its peer's volume bands; with no peer, volume is not scored. The drift accumulator follows the same rule: until the agent's frozen snapshot holds 5 sessions, drift volume is measured against the peer's frozen bands (no peer: no volume term). An empty snapshot made a new agent's first benign session alarm.
+- Cold start for volume: an agent with a peer uses the peer's volume bands blended towards its own, w = n/(n+20) (mixture mean and variance); with no peer, volume is not scored until it has 5 sessions. A new agent's first 7 days are a re-baseline window (snapshot follows learning). The drift accumulator follows the same rule against the frozen snapshot, whose prior is the peer's frozen bands (no peer: no volume term until 5 sessions). An empty snapshot made a new agent's first benign session alarm.
 - Responses only narrow: a re-issued token is a subset of the old one, there is no re-issue when nothing would be removed, and an agent's state only moves towards revoked (a DOWN_SCOPE or a drift alarm never softens a quarantine to scoped_down or watch).
 - A call whose credentials failed is never parked as a HOLD, so approving a hold can't run a call the token didn't allow.
 - The simulated agent runtime renews its own token 5 minutes before the 15-minute expiry (same version, new jti). A runtime that was handed a token (D12's thief) can't renew it.
@@ -287,7 +287,7 @@ The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus on
 ---
 
 ## 8. Eval harness (`npm run eval`)
-- **Seeds:** dev 1000–1099 (tuning allowed); test 3000–3199 (report only). The first report used 2000–2199 as its test split; what it found shaped the fixes below, so those seeds are now `seen` and no longer held out.
+- **Seeds:** dev 1000–1099 (tuning allowed); test 4000–4199 (report only). Earlier reports used 2000–2199 and then 3000–3199 as their test splits; what they found shaped the fixes below, so those seeds are now `seen` and no longer held out.
 - **Benign:** 200 sessions/role + shifted (quarter-end, post-role-change, new agents).
 - **Attacks:** injection→exfil, injection→payment, stolen-token context, escalating drift (3 slopes), constant-rate mimicry, delegation widening, honeytoken, in-distribution mimicry (expected miss).
 - **Configs:** credentials-only · S1-only · S2-only · A-only (S1+S3+S5) · full.
@@ -302,6 +302,7 @@ The live sandbox (`apps/console/src/live/store.ts`) boots the demo world plus on
   - Stolen token in daytime with the real agent idle: 19 of 200 got through → new-runtime step-up on sensitive calls.
   - Payment redirect: inline checks caught 0% (no destination for S3) → `sinkArg: 'iban'` on payments, and the off-charter high-impact step-up.
   - The PS names a poisoned tool, which no scenario covered → tool pinning, D14 and the `poisoned-tool` family.
+  - Second report (3000–3199): a new agent raised 1 drift alarm in 200 sessions (900 dev new-agent days: 20). Its snapshot was frozen empty and its own volume bands switched on abruptly at 5 sessions → a new agent's first week is a re-baseline window, and its volume bands are the peer's blended towards its own with w = n/(n+20), the same prior S2 uses (900 dev days: 0 alarms).
   - Per-call latency grew with history (τ re-sorted every session) → sorted insert and cached volume stats.
 
 ---

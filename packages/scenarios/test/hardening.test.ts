@@ -82,6 +82,27 @@ describe('a role change becomes the new normal', () => {
   });
 });
 
+describe('a new agent settles in', () => {
+  it('procurement-02 works 20 ordinary days from creation without a drift alarm (seeds 3000–3019)', async () => {
+    const run = await Run.create();
+    for (let i = 0; i < 20; i++) {
+      const r = rng(3000 + i), s = await run.session('procurement-02');
+      for (const t of procSession(r).slice(1)) await s.call(t, argsFor(t, r));
+      expect((await s.end())!.alarm).toBe(false);
+      run.nextDay();
+    }
+  });
+
+  it('its first week is a re-baseline window, so a thief who starts on day 2 is still caught by the per-call checks', async () => {
+    const run = await Run.create();
+    run.nextDay();
+    const s = await run.session('procurement-02');
+    await s.call('docs.read_attachment', { file: 'inv-204511.pdf' });
+    const read = await s.call('hr.read_salary', { employee: 'all' });
+    expect(read.executed).toBe(false);
+  });
+});
+
 describe('a new runtime steps up on sensitive calls', () => {
   it('a copied token used in working hours from an unknown machine cannot read sensitive data unattended', async () => {
     const run = await Run.create();

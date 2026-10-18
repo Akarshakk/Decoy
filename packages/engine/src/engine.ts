@@ -122,7 +122,8 @@ export class Engine {
     const names = [...this.catalog.keys()];
     const peer = s.peerOf ? this.agents.get(s.peerOf)?.baseline ?? null : null;
     const baseline = new Baseline(charter.tools, names, peer);
-    const volume = new VolumeBands();
+    const peerRec = s.peerOf ? this.agents.get(s.peerOf) : undefined;
+    const volume = new VolumeBands(peerRec?.volume ?? null);
     const hours: number[] = [], runtimes = new Set<string>(), asns = new Set<string>();
     for (const h of s.history) {
       volume.observeSession(h.tools);
@@ -135,8 +136,10 @@ export class Engine {
       agent: { id: s.id, role: charter.role, displayName: s.displayName, owner: charter.owner, createdAt: s.createdAt, state: 'active', tokenVer: 1 },
       charter, scopes: [...s.scopes], jti: '', jwt: '', removedAt: new Map(),
       profile: { knownRuntimes: [...runtimes], knownAsns: [...asns], activeHours: hours.length ? [pct(0.05), pct(0.95)] : [0, 23] },
-      baseline, volume, snapshot: { baseline: baseline.clone(), volume: volume.clone(), id: `bs_${s.id}_1`, frozenAt: nowMs },
-      drift: new DriftAccumulator(), lastScore: 0, snapshots: 1, peer: s.peerOf ?? null, rebaselineUntil: null, batchUntil: null,
+      baseline, volume, snapshot: { baseline: baseline.clone(), volume: volume.clone(peerRec?.snapshot.volume ?? null), id: `bs_${s.id}_1`, frozenAt: nowMs },
+      drift: new DriftAccumulator(), lastScore: 0, snapshots: 1, peer: s.peerOf ?? null, batchUntil: null,
+      // A brand-new agent's first week is a re-baseline window, like a role change: its snapshot follows what it learns.
+      rebaselineUntil: s.history.length ? null : nowMs + REBASELINE_MS,
     };
     this.agents.set(s.id, rec);
     await this.mint(rec, nowMs);
@@ -175,9 +178,9 @@ export class Engine {
   agentIds() { return [...this.agents.keys()]; }
   peerOf(agentId: string) { return this.rec(agentId).peer; }
   /** The volume bands S2 scores this agent against right now, and whose they are. */
-  volumeFor(agentId: string): { bands: VolumeBands | null; source: 'own' | 'peer' | 'none' } {
+  volumeFor(agentId: string): { bands: VolumeBands | null; source: 'own' | 'blend' | 'peer' | 'none' } {
     const r = this.rec(agentId), bands = this.volumeBandsFor(r);
-    return { bands, source: !bands ? 'none' : bands === r.volume ? 'own' : 'peer' };
+    return { bands, source: !bands ? 'none' : !r.volume.prior ? 'own' : r.volume.sessions.length ? 'blend' : 'peer' };
   }
 
   private rec(id: string) {
@@ -371,17 +374,17 @@ export class Engine {
   }
 
   // Cold start: borrow the peer's volume bands until the agent has enough sessions of its own; with no peer, don't score volume.
+  // Cold start: a new agent with a peer gets the peer's bands blended towards its own (VolumeBands.prior); with no peer,
+  // volume isn't scored until the agent has 5 sessions of its own.
   private volumeBandsFor(r: AgentRecord): VolumeBands | null {
-    if (r.volume.sessions.length >= MIN_VOLUME_SESSIONS) return r.volume;
-    return r.peer ? this.rec(r.peer).volume : null;
+    return r.volume.prior || r.volume.sessions.length >= MIN_VOLUME_SESSIONS ? r.volume : null;
   }
 
-  // A snapshot frozen before the agent had 5 sessions has no volume bands worth the name (an empty one made every
-  // benign tool count a spike and alarmed a new agent on day one). Until then drift uses the peer's frozen bands,
-  // and with no peer no volume term, exactly as S2 does live.
+  // Drift follows the same rule against the frozen snapshot, whose prior is the peer's frozen bands. (An empty snapshot
+  // with no prior made a new agent's first benign session alarm.)
   private driftReference(r: AgentRecord): DriftReference {
-    if (r.snapshot.volume.sessions.length >= MIN_VOLUME_SESSIONS) return r.snapshot;
-    return { baseline: r.snapshot.baseline, volume: r.peer ? this.rec(r.peer).snapshot.volume : null };
+    if (r.snapshot.volume.prior || r.snapshot.volume.sessions.length >= MIN_VOLUME_SESSIONS) return r.snapshot;
+    return { baseline: r.snapshot.baseline, volume: null };
   }
 
   private descendants(s: SessionState): string[] {
@@ -490,7 +493,7 @@ export class Engine {
 
   private refreeze(r: AgentRecord, ts: number) {
     r.snapshots++;
-    r.snapshot = { baseline: r.baseline.clone(), volume: r.volume.clone(), id: `bs_${r.agent.id}_${r.snapshots}`, frozenAt: ts };
+    r.snapshot = { baseline: r.baseline.clone(), volume: r.volume.clone(r.peer ? this.rec(r.peer).snapshot.volume : null), id: `bs_${r.agent.id}_${r.snapshots}`, frozenAt: ts };
   }
 
   // ---------- owner actions (change management) ----------

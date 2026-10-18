@@ -1,6 +1,6 @@
 // What the console pages render, read straight off the Engine. No numbers are made up here: every value is a
 // field of an engine object, a ledger record, or the world's provisioning (AGENT_PROFILES).
-import { DRIFT_H, verifyChain, type AgentState, type Band, type Decision, type Engine, type Factor, type LedgerRecord } from '@swaroop/engine';
+import { CONFIDENCE_K, DRIFT_H, verifyChain, type AgentState, type Band, type Decision, type Engine, type Factor, type LedgerRecord } from '@swaroop/engine';
 import { AGENT_PROFILES } from '@swaroop/world';
 
 const RECENT = 24;
@@ -109,7 +109,7 @@ export function agentView(e: Engine, id: string) {
   return {
     row, charter, charterHistory, scopes,
     baseline: { n: baseline.n, confidence: baseline.confidence(), tau: baseline.tau(), source: ownTau ? 'own' as const : peer ? 'peer' as const : 'default' as const, peer },
-    transitions, volume,
+    transitions, volume, volumeWeight: vf.bands?.prior ? vf.bands.sessions.length / (vf.bands.sessions.length + CONFIDENCE_K) : 1,
     timeline: e.decisions.filter(d => d.call.agentId === id),
     drift: { history: drift.history, S: drift.S, alarmed: drift.alarmed, H: DRIFT_H, snapshot: { id: snap.id, frozenAt: snap.frozenAt } },
   };
